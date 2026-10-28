@@ -1,0 +1,11 @@
+{
+  "name": "carmen-business-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static course and book storefront for Carmen",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test tests/site.test.js",
+    "test:e2e": "node tests/e2e.js"
+  }
+}
