@@ -12,3 +12,4 @@ One file per decision; never edit an accepted ADR's decision. Supersede it with 
 | [0006](0006-catalogue-in-the-database-published-via-build-hook.md) | Catalogue in the database, published via build hook | Accepted |
 | [0007](0007-payment-provider-adapter.md) | Payment provider adapter | Accepted |
 | [0008](0008-digital-licence-quantity-fixed-at-1.md) | Digital licence quantity fixed at 1 | Accepted |
+| [0009](0009-payfast-gateway-and-zar.md) | Payfast as the payment gateway; ZAR as the only store currency | Accepted |

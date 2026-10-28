@@ -2,10 +2,10 @@
 
 | Item | Value |
 |---|---|
-| Version | 0.1 (for review) |
+| Version | 0.2: Payfast/ZAR (D1/D2) applied to PRs 3, 4, 7, 10, 13 |
 | Date | 28 October 2026 |
-| Depends on | [`01-architecture-review.md`](01-architecture-review.md) (ADRs, risks, decisions D1–D13) |
-| Status | **Plan only. Awaiting approval before PR 0.** |
+| Depends on | [`01-architecture-review.md`](01-architecture-review.md) (ADRs, risks, decisions D1–D17) |
+| Status | Approved. PR 0 and PR 1 merged. |
 
 The work runs as 14 small PRs grouped into the spec's five phases. Each PR is independently reviewable and has its own tests. None of them deploy to production. Estimates are developer-days for one developer and include tests and docs.
 
@@ -32,20 +32,22 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 | 0 | 1 | Repo foundation and CI | §6, §8 | D11 | 1 |
 | 1 | 1 | Database schema, RLS, seed, generated types | §4, §5, §6 | D9 (staging project) | 3 |
 | 2 | 1 | Catalogue from DB: build pipeline, SEO URLs, quantity = 1 | J1, J7 (read side) | PR 1 | 3 |
-| 3 | 2 | Payment adapter and server-side checkout (pending orders) | J2 | **D1, D2**, D6, D8, D12 | 3 |
-| 4 | 2 | Verified webhooks, idempotent confirmation, order status | J2, §4.2 | PR 3 | 3 |
+| 3 | 2 | Payfast checkout: ZAR migration, signed form, pending orders | J2 | ~~D1, D2~~ ✓, D6, D8, D12, **D14**, D17 | 3.5 |
+| 4 | 2 | Payfast ITN (4 checks), idempotent confirmation, order status | J2, §4.2 | PR 3; **D16** for the sandbox run | 3 |
 | 5 | 3 | Private storage, delivery tokens, download endpoint | J3 | D4, D5 | 2.5 |
 | 6 | 3 | Email outbox, templates, external and mixed delivery | J3, J4, J5 | D3, D4, D7 | 3 |
-| 7 | 3 | Refunds, chargebacks, cancellations, revocation | §4.2 | PR 4–6 | 2 |
+| 7 | 3 | Admin-initiated refunds (Payfast Refunds API), chargebacks, revocation | §4.2 | PR 4–6, **PR 8**, D15 | 2.5 |
 | 8 | 4 | Admin authentication, roles, MFA, audit log | J6, J7, §4.3 | D10 | 2.5 |
 | 9 | 4 | Admin catalogue: products, categories, assets, coupons, publish | J7 | PR 8 | 4 |
 | 10 | 4 | Admin orders: search, resend, revoke/renew, manual fulfilment, replay | J6 | PR 8 | 3 |
 | 11 | 4 | Metrics, structured logging, monitoring and alerts | §4.3, §6 | PR 10 | 2 |
 | 12 | 5 | Content, consent, SEO/CSP/accessibility polish | §6, §10 | D3, D7, D12, D13 + client content | 3 |
 | 13 | 5 | Staging deployment, runbooks, backups, go-live checklist, UAT | §6, §11 | D9, D10 | 2 |
-| | | **Total** | | | **≈ 38 dev-days** (+20% contingency ≈ 46) |
+| | | **Total** | | | **38 dev-days** (+20% contingency ≈ 46) |
 
-**Critical path:** PR 0 → PR 1 → PR 3 (gated by **D1/D2**) → PR 4 → PR 5/6 → PR 7, then PR 8 → PR 9/10 → PR 13. PRs 2, 8 and 12 can run in parallel with the payment track once PR 1 has merged.
+*v0.2 note: Payfast adds 1 day (PR 3 +0.5, PR 7 +0.5). The v0.1 total of "≈ 38" was mis-summed (its rows added to 37), so the corrected total stays at 38.*
+
+**Critical path:** PR 0 ✓ → PR 1 ✓ → PR 3 (D1/D2 resolved: Payfast, ZAR) → PR 4 → PR 5/6 → PR 8 → PR 7 → PR 9/10 → PR 13. PR 7 now follows PR 8, because Payfast refunds are admin-initiated and need admin auth. PRs 2, 8 and 12 can run in parallel with the payment track once PR 1 has merged.
 
 ---
 
@@ -99,47 +101,57 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 **Acceptance:** J1 still passes on desktop and mobile; every product has a unique title and canonical URL and appears in the sitemap.
 **Rollback:** revert. The previous static catalogue is restored by the revert.
 
-### PR 3: Payment adapter and server-side checkout
-*Blocked by D1 (gateway) and D2 (currency). Validate provider docs before coding (A4).*
+### PR 3: Payfast checkout (ZAR, signed form, pending orders)
+*D1/D2 resolved: Payfast and ZAR ([ADR-0009](adr/0009-payfast-gateway-and-zar.md)). Re-validate Payfast docs before coding (A4).*
 
 **Scope**
-- `netlify/functions/_lib/payments/{provider.ts, paystack.ts | stripe.ts}` implementing `createTransaction`, `verifyWebhook`, `lookupTransaction` and `parseEvent`.
+- **Migration:** add `payfast` to `payment_provider`. Switch the catalogue to **ZAR**, with placeholder rand prices in the seed until the client supplies real ones. Add constraints so products, orders and amount-coupons can only be in ZAR. Regenerate types.
+- `netlify/functions/_lib/payments/{provider.ts, payfast.ts}`: the `PaymentProvider` interface (ADR-0007) and the Payfast implementation of `buildCheckout`, which returns the signed form fields with MD5 over the documented field order, upper-case URL encoding, `+` for spaces and the passphrase. Covered by **known-answer tests** against signatures computed exactly as Payfast documents.
 - `checkout` rewritten as a v2 function with `config.rateLimit`. It:
   - validates input (schema);
   - loads published products and the coupon from the DB;
   - enforces coupon window, max redemptions and per-email limit;
   - computes the total server-side and inserts the `pending` order and items with a provider reference and a hashed access key;
-  - initialises the transaction with the server amount and currency;
+  - rejects totals under **R5.00** (D14);
+  - returns the signed Payfast form fields (`m_payment_id = orders.reference`, amount in rands with 2 decimals), which the browser auto-submits to `/eng/process` (sandbox host when `PAYFAST_MODE=sandbox`);
   - returns `409 price_changed` on an `expectedTotal` mismatch.
+- Storefront prices shown in rands (D17); the coupon editor guard against 100% coupons follows in PR 9.
 - **Remove the per-request coupon creation** from the prototype (G6).
 - Cart page: an email field, a required terms checkbox and a separate, **unticked** marketing opt-in (G12, spec §4.3).
 - `success.html` replaced by a status page that polls `/api/order-status` and shows a neutral "confirming" message (G3). It never claims success here, because that arrives in PR 4.
 - A scheduled cleanup marks stale `pending` orders `expired`.
 
-**Tests:** provider HTTP is mocked with recorded fixtures.
-- **Tampering** (spec §7): modified price, discount, product ID, currency, quantity or `expectedTotal` cannot lower the charged amount; the amount sent to the provider always equals the DB computation.
+**Tests:** no network; Payfast fixtures use fake credentials, never the published sandbox values.
+- **Tampering** (spec §7): modified price, discount, product ID, currency, quantity or `expectedTotal` cannot lower the charged amount; the signed `amount` always equals the DB computation; editing any signed field invalidates the signature.
+- Totals of R4.99 are rejected and R5.00 is accepted; a non-ZAR product is impossible (DB constraint).
 - Unknown, draft or archived product → 400; expired or exhausted coupon → 400; rate limit → 429.
 - A pending order is persisted **before** the provider call, and a provider failure leaves the order `failed`.
 - e2e: cart to provider redirect (mocked); the status page shows neutral text.
 
 **Acceptance:** J2 (payment initiation), spec §7 "Tampering" and "Failed or abandoned payment" (no paid order, no link, no success message).
 
-### PR 4: Verified webhooks, idempotent confirmation, order status
+### PR 4: Payfast ITN, idempotent confirmation, order status
 **Scope**
-- A `webhook-<provider>` v2 function. It reads the raw body, verifies the signature in constant time, inserts `payment_events` (deduplicated on `UNIQUE(provider, provider_event_id)`) and runs a **transaction lookup** via the provider API. It validates amount, currency, reference and live/test mode, then calls `confirm_payment(order_id, event_id)`.
+- A `payfast-itn` v2 function (form-encoded POST) that runs **all four Payfast checks**, failing closed:
+  1. MD5 signature with the passphrase, compared in constant time;
+  2. the connecting IP resolves from `www`, `w1w`, `w2w` or `sandbox.payfast.co.za` (never `Referer`);
+  3. `amount_gross` equals the order total **exactly**, and `merchant_id` and `m_payment_id` match;
+  4. server confirmation from `/eng/query/validate` is `VALID`.
+
+  It then inserts `payment_events` with `provider_event_id = pf_payment_id:payment_status` (deduplicated on `UNIQUE(provider, provider_event_id)`) and, for `COMPLETE`, calls `confirm_payment(order_id, event_id)`. It returns 200 once the event is durably stored, so Payfast stops retrying.
 - `confirm_payment()` (SQL, one transaction): pending → paid, and idempotently creates fulfilment rows and the email outbox row.
 - Failed events are stored with the error.
 - `scripts/replay-event.ts` (and later the admin button) safely re-processes them.
 - `order-status` returns `{status, items:[{title, delivery summary}]}` only with a valid `ref` + `k`; the page now says "Payment received" only on `paid` and clears the cart then.
 
 **Tests:**
-- **Webhook replay** (spec §7): the same event POSTed 3 times gives one paid order, one fulfilment set and one outbox row.
-- Bad signature → 401 with nothing written. Valid signature but lookup mismatch (amount, currency or reference) → event `failed`, order not paid.
-- A test-mode event against a live-mode order is rejected.
+- **Webhook replay** (spec §7): the same ITN POSTed 3 times gives one paid order, one fulfilment set and one outbox row.
+- Each check fails independently and leaves no paid order: a bad signature, a non-Payfast source IP, an amount R0.01 off, a foreign `merchant_id`, an unknown reference, and validate returning `INVALID` or timing out. Every failure is stored as a failed event for replay.
+- A sandbox ITN against a live-mode order is rejected (and the reverse).
 - Out-of-order or concurrent duplicate events (parallel requests) still give one fulfilment, enforced by the DB constraint.
 - Replaying a `failed` event after fixing the cause succeeds exactly once.
 
-**Acceptance:** spec §7 "Checkout success" (exactly one paid order and one delivery set) and "Webhook replay", tested in **provider sandbox on staging** as well as with the mocked suite.
+**Acceptance:** spec §7 "Checkout success" (exactly one paid order and one delivery set) and "Webhook replay". Tested with the fixture suite and in the **Payfast sandbox on the staging deploy**, which needs a public `notify_url` (D16). The sandbox sends each ITN only once, so the replay tool is exercised there too.
 
 ### PR 5: Private storage, delivery tokens, download endpoint
 **Scope**
@@ -171,17 +183,22 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 **Acceptance:** J3, J4, J5, spec §7 "Mixed delivery" and "Email outage".
 
-### PR 7: Refunds, chargebacks, cancellations
+### PR 7: Admin-initiated refunds, chargebacks, cancellations
+*Payfast sends no refund or chargeback notifications (ADR-0009), so these are admin actions. Depends on PR 8 (admin auth).*
+
 **Scope**
-- Webhook handling for refund (full/partial), dispute opened/closed and abandoned/cancelled transactions, through the same verified, idempotent path.
-- `record_refund()` revokes delivery tokens for the affected items and creates an `action_required` admin task for external access.
+- An `admin-refund` function (owner/admin, aal2, audited). It calls the Payfast **Refunds API**: query first (`GET /refunds/query/{pf_payment_id}`), then create (`POST /refunds/{pf_payment_id}`, cents), with the API signature (alphabetised MD5 plus the passphrase), `merchant-id`, `version` and `timestamp` headers, and `?testing=true` in sandbox. Where Payfast requires a bank payout, it returns "complete in the Payfast dashboard, then record" (D15).
+- A "record refund" action for refunds done in the dashboard, and a "mark disputed / dispute resolved" action for chargebacks.
+- `record_refund()` (SQL, one transaction) updates the order status and `refunded_minor`, revokes delivery tokens for the affected items, and creates an `action_required` admin task for external access.
+- Abandoned payments need no action: pending orders expire, and a late `COMPLETE` ITN is still honoured.
 - Refund email.
 - Financial rows are append-only.
 
 **Tests:**
 - **Refund** (spec §7): the refund is recorded, and an existing valid token is denied after the refund.
 - A partial refund revokes only the refunded items.
-- A duplicate refund event → one record.
+- Double-clicking refund → one Payfast refund call and one record (idempotency key per refund request).
+- Payfast refund API errors (401 signature, 429 rate limit, `NOT_AVAILABLE`) leave the order unchanged and are surfaced to the admin.
 - A dispute marks the order `disputed` and revokes access as per policy (D7).
 
 **Acceptance:** spec §4.2 refunds/chargebacks; spec §7 "Refund".
@@ -220,7 +237,7 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 ### PR 10: Admin orders
 **Scope**
 - Order search (reference, email, date, status) and order detail (items, payments, fulfilments, email log, events).
-- Actions, all audited: **resend delivery**, **revoke / renew links**, **mark manual access granted**, **replay failed event**, record a manual note.
+- Actions, all audited: **resend delivery**, **revoke / renew links**, **mark manual access granted**, **replay failed ITN**, **refund** / **record refund** / **mark disputed** (UI for the PR 7 functions; owner/admin only), record a manual note.
 - Support view of `payment_events` with status `failed`.
 
 **Tests:**
@@ -251,16 +268,16 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 ### PR 13: Staging, runbooks, go-live
 **Scope**
-- Netlify staging context and a separate Supabase staging project, all in provider **test mode**.
+- Netlify staging context and a separate Supabase staging project, using the **Payfast sandbox** (`PAYFAST_MODE=sandbox`, sandbox merchant credentials and passphrase, `notify_url` on the staging domain).
 - `docs/runbooks/`:
   - deploy;
   - rotate keys;
   - backups and **restore drill**;
   - replay failed webhooks;
   - resend delivery;
-  - refund handling;
+  - refund handling (Payfast API vs dashboard plus record, D15) and **chargeback handling** (Payfast emails → mark disputed);
   - incident response.
-- Go-live checklist (spec §11), a UAT script mapping every J1–J7 journey and spec §7 test to manual steps, and a sign-off record.
+- Go-live checklist (spec §11), including the Payfast live switch: live merchant ID, key and passphrase in production env only, `PAYFAST_MODE=live`, production `notify_url` reachable, and one real low-value purchase refunded end to end. A UAT script mapping every J1–J7 journey and spec §7 test to manual steps, and a sign-off record.
 
 **Acceptance:** spec §11 Definition of Done. **Production cut-over happens only after the named owner signs off (outside this PR).**
 

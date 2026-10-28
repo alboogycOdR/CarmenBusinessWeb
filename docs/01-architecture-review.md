@@ -2,11 +2,11 @@
 
 | Item | Value |
 |---|---|
-| Version | 0.1 (for review) |
+| Version | 0.2: D1/D2 resolved (Payfast, ZAR) |
 | Date | 28 October 2026 |
 | Authoritative scope | *CarmenBusinessWeb Development Specification v1.0* ("the spec") |
 | Repository state reviewed | `claude/trusting-franklin-l4z0a1` @ `0621530` |
-| Status | **Plan only. No implementation has started.** Approval required before PR 0. |
+| Status | Approved. PR 0 and PR 1 merged. v0.2 records the Payfast/ZAR decision (§3.1, §3.2, ADR-0009). |
 
 Companion document: [`02-implementation-backlog.md`](02-implementation-backlog.md) (PR plan, tasks, acceptance mapping).
 
@@ -16,7 +16,7 @@ Companion document: [`02-implementation-backlog.md`](02-implementation-backlog.m
 
 1. **Keep the storefront.** The static HTML/CSS/JS front end is sound, tested and fast. No technical reason was found to migrate to Next.js (see §5, ADR-01). It will be kept and extended with a small build step.
 2. **The commerce backend does not exist yet.** The current checkout is a stateless prototype. It has no order record, no payment confirmation, no fulfilment, no delivery and no admin. Its success page announces "order confirmed" from the browser redirect alone. That breaks spec §4.1, and it **must not be deployed with live keys**.
-3. **The payment gateway decision blocks payment work.** Stripe lists South Africa only as an "extended network" country tied to Paystack, not as a standard self-serve merchant country. If the business is registered in South Africa, Paystack is the likely gateway, and settlement will probably be in ZAR. The design therefore puts payments behind a provider adapter, so PR 0 and PR 1 can proceed before the decision is made.
+3. **Payment gateway: Payfast, store currency: ZAR** (decided 28 October 2026, D1/D2). Payfast has no signed webhooks and no refund notifications, so the design below uses Payfast's four-step ITN validation and admin-initiated refunds ([ADR-0009](adr/0009-payfast-gateway-and-zar.md)). The provider adapter (ADR-0007) stays, so a second gateway can be added later without touching order logic.
 4. **Target architecture** (spec §5), validated:
    - Static site on Netlify.
    - Netlify Functions for checkout, webhooks, downloads, status and admin operations.
@@ -89,7 +89,7 @@ flowchart LR
   subgraph Netlify
     CDN[(CDN: pre-rendered pages<br/>+ catalog.js + sitemap)]
     F1[fn: checkout]
-    F2[fn: webhook-&lt;provider&gt;]
+    F2[fn: payfast-itn]
     F3[fn: order-status]
     F4[fn: download]
     F5[fn: admin-*<br/>resend/revoke/refund/publish]
@@ -101,13 +101,15 @@ flowchart LR
     ST[(Private bucket<br/>product files)]
     AU[Auth: staff only, MFA]
   end
-  PSP[Payment provider<br/>Paystack or Stripe]
+  PSP[Payfast<br/>ZAR]
   EM[Resend]
 
   SF --> CDN
   SF -->|cart ids + email| F1 --> DB
-  F1 -->|init, server amount| PSP
-  PSP -->|signed webhook| F2 -->|verify + lookup| PSP
+  F1 -->|signed form fields, server amount| SF
+  SF -->|POST /eng/process| PSP
+  PSP -->|ITN form POST| F2 -->|4 checks incl. /eng/query/validate| PSP
+  F5 -->|Refunds API| PSP
   F2 -->|confirm_payment RPC| DB
   SF -->|poll| F3 --> DB
   F6 --> DB
@@ -129,14 +131,16 @@ flowchart LR
    - computes the total in minor units;
    - returns `409 price_changed` if `expectedTotal` differs, which is for user experience only and never used for charging;
    - inserts `orders` (status `pending`) and `order_items` with a price snapshot;
-   - initialises the provider transaction with `reference = orders.reference` and the server amount and currency;
-   - returns the provider redirect URL.
-2. **Webhook** (`POST /api/webhooks/<provider>`). The function:
-   - reads the raw body and verifies the signature in constant time;
-   - inserts into `payment_events` with `UNIQUE(provider, provider_event_id)`; a duplicate returns 200 and stops;
-   - **looks the transaction up from the provider's API**;
-   - checks amount, currency, reference and live/test mode against the order;
-   - calls the Postgres function `confirm_payment()` in **one transaction**.
+   - rejects totals under **R5.00**, Payfast's minimum (D14);
+   - builds the Payfast form fields (`merchant_id`, `merchant_key`, `return_url`, `cancel_url`, `notify_url`, `email_address`, `m_payment_id = orders.reference`, `amount` as rands with 2 decimals, `item_name`) and signs them server-side: MD5 over the fields in Payfast's documented order, URL-encoded with upper-case escapes and spaces as `+`, salted with the **passphrase**, which never leaves the server;
+   - returns the fields. The browser auto-submits them as a form POST to `https://www.payfast.co.za/eng/process` (sandbox: `sandbox.payfast.co.za`). A tampered field breaks the signature, and the amount is re-checked on the ITN anyway.
+2. **Payment notification (ITN)** (`POST /api/payfast/itn`, form-encoded). Payfast signs nothing with a shared secret beyond MD5, so the function runs **all four checks Payfast requires** and proceeds only if every one passes:
+   1. **Signature:** recompute the MD5 over the posted fields in received order, excluding `signature`, plus the passphrase. Compare in constant time.
+   2. **Source:** the connecting IP (Netlify's `x-nf-client-connection-ip`) must resolve from `www`, `w1w`, `w2w` or `sandbox.payfast.co.za`. Never the `Referer` header, which is spoofable.
+   3. **Amount and identity:** `amount_gross` must equal the order total **exactly in cents**. `merchant_id` must be ours, and `m_payment_id` must be a known order reference.
+   4. **Server confirmation:** POST the same parameter string back to `/eng/query/validate`. The response must be exactly `VALID`.
+
+   It then stores the event in `payment_events`, deduplicated on `UNIQUE(provider, provider_event_id)` with `provider_event_id = pf_payment_id:payment_status` (Payfast has no event IDs). A duplicate returns 200 and stops. For `COMPLETE` it calls the Postgres function `confirm_payment()` in **one transaction**. Payfast retries until it gets a 200, so the handler responds 200 once the event is durably stored, and failed checks are logged for replay, never silently dropped. The **sandbox sends each ITN only once**, which makes the replay tool part of the test plan.
 
    `confirm_payment()` marks the order `paid` and creates `fulfilments` per item and asset (with `UNIQUE(order_item_id, asset_id)`). It also creates `delivery_tokens` and enqueues an `email_events` outbox row (with `UNIQUE(order_id, template, dedupe_key)`). Any failure marks the event `failed` for replay.
 3. **Success page** polls `GET /api/order-status?ref=&k=`. `k` is a random per-order access key returned at checkout and held in `sessionStorage`. The page shows **"Payment received"** only when the server says `paid`. Otherwise it shows a neutral "We're confirming your payment…" message with a support path, and it clears the cart only on `paid`.
@@ -149,11 +153,17 @@ flowchart LR
 
 ### 3.2 Refunds, chargebacks, cancellation
 
-Provider refund and dispute events go through the same verified, idempotent webhook path. The handler:
-- moves the order to `refunded`, `partially_refunded` or `disputed`;
-- **revokes** delivery tokens so future downloads fail;
-- creates an admin task for any external course access that must be revoked manually;
-- sends the refund email.
+Payfast sends **no** refund or chargeback notifications. Its ITN covers `COMPLETE` (and `CANCELLED` for subscriptions, which are out of scope). Refunds are therefore **initiated by an admin** (owner/admin role, aal2) from the order screen, through one audited server function. The function:
+1. calls Payfast's **Refunds API**: `GET /refunds/query/{pf_payment_id}` to learn the amount available and method, then `POST /refunds/{pf_payment_id}` with the amount in cents. Requests are signed as the API requires (MD5 of the alphabetised headers and body plus the passphrase; `merchant-id`, `version: v1` and `timestamp` headers; `?testing=true` in sandbox). Where Payfast requires a **bank payout** (non-card methods), the admin is instead told to complete the refund in the Payfast dashboard, then records it;
+2. calls `record_refund()` (SQL, one transaction), which:
+   - moves the order to `refunded` or `partially_refunded`;
+   - **revokes** delivery tokens for the refunded items;
+   - creates an admin task for any external course access that must be revoked manually;
+   - queues the refund email.
+
+**Chargebacks** reach the merchant from Payfast by email or dashboard, so the admin records them with "mark disputed", which revokes access per policy (D7).
+
+**Abandoned payments** never produce an ITN. Their pending orders expire after 2 hours (`orders.expires_at`), and a late `COMPLETE` ITN for an expired order is still honoured (`expired → paid`).
 
 Financial rows are never deleted; corrections are new rows.
 
@@ -206,15 +216,17 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 
 | ID | Risk | Likelihood / Impact | Mitigation |
 |---|---|---|---|
-| R1 | Gateway ineligible for the merchant's country. Stripe is not a standard self-serve country for South Africa. | High / High | `PaymentProvider` adapter interface (`createTransaction`, `verifyWebhook`, `lookupTransaction`, `parseRefund`). Implement the confirmed provider first. Decision D1 before PR 3. |
-| R2 | Settlement currency mismatch: a ZAR-settling account versus the USD prices shown today. | High / Med | Single store currency in the MVP (D2). Currency is stored per product and order, and checkout rejects a mismatch. |
+| R1 | ~~Gateway ineligible~~ **Resolved:** Payfast (D1). Remaining risk: Payfast's notification is authenticated by MD5, a weak hash. | Med / High | Trust the ITN only when all four checks pass. The server-to-server `VALID` confirmation and the exact-amount match carry the weight, not MD5 alone. The adapter interface (ADR-0007) is kept. |
+| R2 | ~~Currency mismatch~~ **Resolved:** ZAR only (D2). Remaining risk: placeholder prices are USD, and international buyers see rands only. | Med / Low | PR 3 migrates the catalogue to ZAR with a DB constraint. The client supplies rand prices (D4 intake). |
 | R3 | Granting access from a redirect, or a double webhook causing double delivery. | Med / High | Webhook-only fulfilment, DB unique constraints, `confirm_payment()` in one transaction, and replay tests (spec §7 "Webhook replay" ×3). |
 | R4 | Leaking files or external course links. | Med / High | Private bucket, hashed opaque tokens, 60 s signed URLs, a private `product_assets` table, and a "no secrets in build output" CI check that greps `dist` for storage paths and asset URLs. |
 | R5 | Admin privilege escalation. | Low / High | No sign-up route, roles enforced by RLS (aal2), functions re-check the role, audit log, RLS test suite run as anon, customer-like and admin JWTs. |
 | R6 | Email deliverability or outage. | Med / Med | Verified sending domain (SPF/DKIM/DMARC), outbox with retry and backoff, admin resend, alert on `failed` rows. |
 | R7 | **Supabase free tier pauses inactive projects** and has limited backups. | High / High | Production on a paid tier (needs approval, D9). Staging can be free. Document the restore procedure. |
 | R8 | Netlify function rate limiting exists only as a per-function `config.rateLimit` (functions v2), and plan support must be confirmed. | Med / Med | Migrate the functions to v2 and set `rateLimit` on checkout, webhook and download. Fall back to a DB counter if the plan lacks it. |
-| R9 | Serverless cold starts and timeouts on webhooks; providers retry, and Paystack expects a quick 200. | Low / Med | Verify, persist the event and return 200 fast. Heavy work goes in the same request only if it is under the budget, otherwise the scheduled worker picks up `received` events. |
+| R9 | Serverless cold starts and timeouts on ITNs. Payfast retries until it gets a 200, but the **sandbox sends each ITN once**. | Med / Med | Verify, persist the event and return 200 fast. Heavy work goes in the same request only if it is under the budget, otherwise the scheduled worker picks up `received` events. A replay tool covers missed sandbox ITNs. |
+| R15 | Refunds and chargebacks are manual-trigger operations, because Payfast doesn't notify them. Access could stay open if an admin forgets. | Med / Med | Refunds are recorded only through the admin refund action, which revokes access in the same transaction. The PR 11 health check flags refunds or disputes visible in Payfast but not recorded, once the reconciliation report exists. A runbook covers chargebacks. |
+| R16 | The ITN needs a public `notify_url`, so a real sandbox end-to-end test can't run on localhost. | High / Med | Automated tests use ITN fixtures signed with test credentials. The sandbox end-to-end run happens on the Netlify staging deploy (D9). |
 | R10 | Displayed prices are stale after an admin edit before the rebuild completes. | Med / Low | Checkout prices from the DB and returns `409 price_changed`. Publish shows build status. |
 | R11 | Misleading content at launch (placeholder reviews and claims). | High / High (consumer law) | Content gate in PR 12. Remove the "Verified buyer" badge until reviews are real. Add a lint test that fails the build on placeholder markers. |
 | R12 | Scope creep into LMS or portal. | Med / Med | Spec §9 exclusions restated in each PR template. External courses are delivered as link + instructions only. |
@@ -244,8 +256,8 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 
 | ID | Decision needed | Recommendation | Blocks |
 |---|---|---|---|
-| **D1** | Business registration country, and **payment gateway** (Paystack or Stripe). | If registered in South Africa, use Paystack. Confirm account eligibility for digital goods. | **PR 3** |
-| **D2** | Store / settlement currency, and whether international buyers see USD. | One currency in the MVP (likely ZAR); display-only conversion later. | **PR 3** |
+| ~~D1~~ | ~~Payment gateway~~ | **Decided 28 Oct 2026: Payfast.** | ✓ |
+| ~~D2~~ | ~~Store currency~~ | **Decided 28 Oct 2026: ZAR (rands) only.** | ✓ |
 | D3 | VAT registration and whether prices are tax-inclusive. Invoice requirements. | Tax-inclusive prices, `tax_minor` recorded, a receipt email with the VAT number if registered. | PR 6 (receipt), PR 11 (metrics) |
 | **D4** | Per product: file, external link or both. Instant or manual external access, with realistic manual timing. | Capture in a product intake sheet. | **PR 5–6** test data; PR 12 content |
 | D5 | Download expiry and limits. | Link valid 7 days, 5 downloads, renewable by admin. | PR 5 |
@@ -257,6 +269,10 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 | **D11** | **Branching / PR base.** The repo's only branch is `claude/trusting-franklin-l4z0a1`, and it is the default. | Create a protected `main` from the current head, plus a `staging` branch tied to a Netlify staging context, with one feature branch per PR. **I need approval to create these branches** (my current permission is to push to the one designated branch only). | **PR 0** |
 | D12 | Newsletter provider and consent wording. Does the popup discount require newsletter opt-in? | Separate, unticked opt-in at checkout. The popup is an explicit opt-in with a consent line. | PR 3, PR 12 |
 | D13 | Reviews: will real, verifiable reviews be supplied, or should the reviews page be hidden until then? | Hide the page and badge until real reviews exist. | PR 12 |
+| **D14** | Payfast's **R5.00 minimum**: what happens when a coupon brings the total below R5 (including 100% coupons)? | Reject at checkout with a clear message, and make the coupon editor refuse a 100% coupon. Free give-aways go out as free resources, not R0 orders. | **PR 3** |
+| D15 | Refund operations: may admins trigger card refunds via the Payfast API from our admin, or should all refunds happen in the Payfast dashboard and then be recorded in ours? | Both: API refunds where Payfast reports `REFUNDABLE` by card; dashboard plus "record refund" for bank-payout cases. | PR 7, PR 10 |
+| **D16** | **Payfast accounts:** a live merchant account (registered business, passphrase set) owned by the client, and a **sandbox account** for staging. | Client creates both. The developer gets sandbox credentials only. | **PR 4** (sandbox end-to-end), PR 13 |
+| D17 | Price display format for rands. | `R1 997.00` (en-ZA grouping, decimal point), consistent in cart, emails and receipts. | PR 3 |
 
 ---
 
@@ -269,6 +285,10 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 - **A5.** No deployment, merge, paid service or live payment setting will be changed without explicit approval. The work targets local, CI and **staging (test mode) only**.
 
 ## 8. Sources consulted for provider assumptions
+
+- **Payfast (decision D1)**, read from the official developer docs on 28 Oct 2026 and to be re-validated at the start of PR 3 (A4). Sources: [custom integration and ITN](https://developers.payfast.co.za/docs) (form fields, signature rules, the four ITN checks, the `/eng/query/validate` endpoint, valid hosts, retries, sandbox behaviour, R5.00 minimum) and the [API reference](https://developers.payfast.co.za/api) (API signature, `?testing=true`, Refunds API query and create, amounts in cents, bank-payout fields).
+
+*Superseded by D1, kept for the record:*
 
 - Stripe availability in South Africa ("extended network" via Paystack), from secondary sources; **must be confirmed with Stripe directly**: [dodopayments.com](https://dodopayments.com/blogs/stripe-supported-countries-alternatives), [thecondia.com](https://thecondia.com/stripe-africa-payments-tax-2025/), [skydo.com](https://www.skydo.com/people-ask/how-to-use-stripe-in-south-africa)
 - Paystack webhook signing (HMAC-SHA512 of the raw body with the secret key; retry schedule): [hookdeck.com guide](https://hookdeck.com/webhooks/platforms/guide-to-paystack-webhooks-features-and-best-practices)
