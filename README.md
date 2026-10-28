@@ -57,6 +57,15 @@ npm run check          # all of the above
 
 `SHOTS=/some/dir npm run test:e2e` also saves full-page screenshots at desktop and mobile widths. On a fresh machine, run `npx playwright install chromium` once.
 
+### Database (PR 1 onwards)
+
+Requires Docker. The schema, access rules and their tests are documented in [`docs/database.md`](docs/database.md).
+
+```bash
+npm run db:start   # local Supabase: applies migrations + seed
+npm run test:db    # schema lint + pgTAP (RLS matrix, integrity) + API-surface tests
+```
+
 ### Continuous integration
 
 Every pull request, and every push to `main` or `staging`, runs `.github/workflows/ci.yml`. Any red job blocks merge once branch protection is enabled.
@@ -66,6 +75,7 @@ Every pull request, and every push to `main` or `staging`, runs `.github/workflo
 | Typecheck, unit tests, audit | `tsc`, `node:test` suites, `npm audit --audit-level=high` |
 | End-to-end | Playwright on Chromium; screenshots uploaded as a build artifact |
 | Secret scanning | gitleaks over the **full git history** (binary checksum-verified) |
+| Database | Fresh local Supabase: migrations + seed from scratch, schema lint, pgTAP, API-surface tests, generated-types drift check |
 
 Actions are pinned to commit SHAs, and Dependabot proposes updates weekly (npm) and monthly (actions). Secrets never go in the repo: `.env.example` lists every variable, and real values live only in Netlify environment settings, separate for test and live.
 
@@ -82,7 +92,9 @@ assets/js/site-config.js   ALL content (also read by the checkout function)
 assets/js/lib.js           pure logic: filtering, cart maths, reviews, URL safety (unit-tested)
 assets/js/main.js          rendering + interactions
 netlify/functions/checkout.js   Stripe Checkout session builder (unit-tested with a mocked Stripe)
-tests/                     site.test.js, checkout.test.js, repo.test.js, e2e.js
+tests/                     site.test.js, checkout.test.js, repo.test.js, db.api.test.js, e2e.js
+supabase/                  config, migrations, seed, pgTAP tests, rollback scripts
+types/database.ts          generated DB types
 docs/                      architecture review, backlog, ADRs
 .github/                   CI workflow, Dependabot, PR template
 ```

@@ -69,7 +69,7 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 - `supabase/migrations/*`: every table in review §3.5, the enums, unique constraints, `updated_at` triggers and the `public_catalog` view.
 - Helper functions `is_admin()` and `is_aal2()`, an append-only `audit_log` (UPDATE and DELETE revoked) and default-deny RLS on every table.
 - `supabase/seed.sql`: sample categories and products covering file, external-instant, external-manual and bundle; one coupon; one admin profile created only in seed.
-- Generate `types/database.ts`. Add a `db` job to CI that starts Supabase locally.
+- Generate `types/database.ts`. Add a `db` job to CI that starts Supabase locally. *(As built: no staff account is seeded, because tests create their own users and real staff are granted by script in PR 8, so no usable password is committed. See [`database.md`](database.md) §7.)*
 
 **Tests:** pgTAP or SQL tests run as `anon`, `authenticated` (no admin profile), `admin` with aal1 and `admin` with aal2. They prove:
 - `anon` reads only published rows from `public_catalog`;
