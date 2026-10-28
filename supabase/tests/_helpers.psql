@@ -1,0 +1,105 @@
+-- Shared pgTAP helpers, included by each *.test.sql file with \ir.
+-- Everything here lives inside the test's transaction and is rolled back.
+create extension if not exists pgtap with schema extensions;
+
+create schema tests;
+grant usage on schema tests to anon, authenticated, service_role;
+
+-- Act as an API role with given JWT claims, exactly as PostgREST does:
+-- SET ROLE plus request.jwt.claims (read by auth.uid() / auth.jwt()).
+create function tests.act_as(p_role text, p_sub uuid default null, p_aal text default 'aal1')
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_sub, 'role', p_role, 'aal', p_aal)::text, true);
+  perform set_config('role', p_role, true);
+end;
+$$;
+
+-- Back to the superuser with no JWT (setup / maintenance context).
+create function tests.as_postgres()
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+end;
+$$;
+
+-- Create an auth user and (optionally) a staff profile; returns the user id.
+create function tests.make_user(p_email text, p_role public.admin_role default null, p_id uuid default null)
+returns uuid
+language plpgsql
+as $$
+declare uid uuid := coalesce(p_id, gen_random_uuid());
+begin
+  insert into auth.users (id, email) values (uid, p_email);
+  if p_role is not null then
+    insert into public.admin_profiles (user_id, role) values (uid, p_role);
+  end if;
+  return uid;
+end;
+$$;
+
+-- Rows visible to the *current* role (runs as invoker, so RLS applies).
+create function tests.count_rows(p_table text)
+returns bigint
+language plpgsql
+as $$
+declare n bigint;
+begin
+  execute format('select count(*) from public.%I', p_table) into n;
+  return n;
+end;
+$$;
+
+-- Rows actually changed by a statement. RLS silently filters UPDATE/DELETE
+-- instead of raising, so authorization tests must check the row count.
+create function tests.affected(p_sql text)
+returns bigint
+language plpgsql
+as $$
+declare n bigint;
+begin
+  execute p_sql;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+grant execute on all functions in schema tests to anon, authenticated, service_role;
+
+-- A paid order with an item, a file fulfilment, a delivery token, a payment
+-- event and an outbox email; returns the order id. Uses seed product
+-- book-one (file assets) so every operational table has one row to read.
+create function tests.make_paid_order(p_email text default 'buyer@example.com')
+returns uuid
+language plpgsql
+as $$
+declare
+  oid uuid;
+  item uuid;
+  ful uuid;
+begin
+  insert into public.orders (email, access_key_hash, currency, subtotal_minor, total_minor, provider, terms_accepted_at)
+  values (p_email, extensions.digest('k-' || p_email, 'sha256'), 'USD', 2400, 2400, 'paystack', now())
+  returning id into oid;
+  insert into public.order_items (order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
+  values (oid, 'a0000000-0000-4000-8000-000000000006', 'The First Book', 'book', 2400, 1, 2400, 'USD')
+  returning id into item;
+  update public.orders set status = 'paid', paid_at = now(), provider_txn_id = 'txn_' || oid where id = oid;
+  insert into public.payment_events (provider, provider_event_id, type, order_id, payload, status)
+  values ('paystack', 'evt_' || oid, 'charge.success', oid, '{"test": true}', 'processed');
+  insert into public.fulfilments (order_id, order_item_id, asset_id, kind)
+  values (oid, item, 'b0000000-0000-4000-8000-000000000007', 'file')
+  returning id into ful;
+  insert into public.delivery_tokens (fulfilment_id, token_hash, expires_at, max_downloads)
+  values (ful, extensions.digest('token-' || oid, 'sha256'), now() + interval '7 days', 5);
+  insert into public.email_events (order_id, template, to_email) values (oid, 'delivery', p_email);
+  return oid;
+end;
+$$;

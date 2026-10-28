@@ -47,7 +47,7 @@ test("CI workflow pins actions to commit SHAs and runs every gate", () => {
   const uses = [...ci.matchAll(/uses:\s*([^\s#]+)/g)].map((m) => m[1]);
   assert.ok(uses.length > 0);
   for (const u of uses) assert.match(u, /@[0-9a-f]{40}$/, `action not pinned to a SHA: ${u}`);
-  for (const step of ["npm run typecheck", "npm test", "npm run test:e2e", "npm audit", "gitleaks git"]) {
+  for (const step of ["npm run typecheck", "npm test", "npm run test:e2e", "npm audit", "gitleaks git", "npm run db:start", "npm run test:db", "git diff --exit-code -- types/database.ts"]) {
     assert.ok(ci.includes(step), `CI is missing: ${step}`);
   }
   assert.match(ci, /GITLEAKS_SHA256: [0-9a-f]{64}/, "gitleaks download must be checksum-verified");

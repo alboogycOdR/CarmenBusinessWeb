@@ -18,5 +18,5 @@
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["netlify/functions/**/*", "scripts/**/*"]
+  "include": ["netlify/functions/**/*", "scripts/**/*", "types/**/*"]
 }
