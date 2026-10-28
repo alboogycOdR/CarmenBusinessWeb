@@ -1,0 +1,22 @@
+{
+  // Type-checks server-side code only (Netlify Functions + scripts).
+  // The storefront in assets/js stays plain browser JS (ADR-0002).
+  // Strict type-checking applies to .ts files. Legacy .js (the checkout
+  // prototype, replaced in PR 3) is parsed for syntax but not type-checked.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["netlify/functions/**/*", "scripts/**/*"]
+}

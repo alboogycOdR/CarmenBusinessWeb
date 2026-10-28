@@ -44,15 +44,34 @@ Set `brand.formEndpoint` to a Formspree/Basin/ConvertKit-style endpoint that acc
 
 ## 4. Develop, test, deploy
 
+Requires Node 22 (`.nvmrc`). Dependencies are pinned exactly and locked.
+
 ```bash
-npm start            # http://localhost:8080
-npm test             # 21 unit + content/link + checkout-function tests (Node only)
-npm install --no-save playwright && npm run test:e2e   # 13 browser scenarios
+npm ci                 # install the exact locked toolchain
+npm start              # http://localhost:8080
+npm run typecheck      # strict TypeScript for server code (ADR-0002)
+npm test               # unit, content/link, checkout-function and repo guard-rail tests
+npm run test:e2e       # Playwright browser scenarios
+npm run check          # all of the above
 ```
 
-`SHOTS=/some/dir npm run test:e2e` also saves full-page screenshots at desktop and mobile widths.
+`SHOTS=/some/dir npm run test:e2e` also saves full-page screenshots at desktop and mobile widths. On a fresh machine, run `npx playwright install chromium` once.
 
-Deploy the folder as-is to Netlify (config in `netlify.toml`: headers, 404, functions). Without the checkout function it also works on any static host (Cloudflare Pages, Vercel, GitHub Pages).
+### Continuous integration
+
+Every pull request, and every push to `main` or `staging`, runs `.github/workflows/ci.yml`. Any red job blocks merge once branch protection is enabled.
+
+| Job | Gate |
+|---|---|
+| Typecheck, unit tests, audit | `tsc`, `node:test` suites, `npm audit --audit-level=high` |
+| End-to-end | Playwright on Chromium; screenshots uploaded as a build artifact |
+| Secret scanning | gitleaks over the **full git history** (binary checksum-verified) |
+
+Actions are pinned to commit SHAs, and Dependabot proposes updates weekly (npm) and monthly (actions). Secrets never go in the repo: `.env.example` lists every variable, and real values live only in Netlify environment settings, separate for test and live.
+
+### Branches and pull requests
+
+`main` is the protected base, `staging` deploys to the staging context in payment test mode, and each backlog item gets its own `feat/<nn>-<slug>` branch. Every PR uses `.github/pull_request_template.md`, including an **Acceptance evidence** table. Plans and decisions are in [`docs/`](docs/), with ADRs in [`docs/adr/`](docs/adr/).
 
 ## Layout
 
@@ -63,7 +82,9 @@ assets/js/site-config.js   ALL content (also read by the checkout function)
 assets/js/lib.js           pure logic: filtering, cart maths, reviews, URL safety (unit-tested)
 assets/js/main.js          rendering + interactions
 netlify/functions/checkout.js   Stripe Checkout session builder (unit-tested with a mocked Stripe)
-tests/                     site.test.js, checkout.test.js, e2e.js
+tests/                     site.test.js, checkout.test.js, repo.test.js, e2e.js
+docs/                      architecture review, backlog, ADRs
+.github/                   CI workflow, Dependabot, PR template
 ```
 
 ## Design notes and trade-offs
