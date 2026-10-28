@@ -53,7 +53,7 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 ### PR 0: Repo foundation and CI
 **Scope**
-- `package.json`: add `devDependencies` (playwright, typescript, `@types/node`, supabase CLI), a lockfile, and `engines.node` with `.nvmrc` set to 22.
+- `package.json`: add `devDependencies` (playwright, typescript, `@types/node`), a lockfile, and `engines.node` with `.nvmrc` set to 22. *(As built: the Supabase CLI moved to PR 1, where it is first used, so it isn't a dead dependency.)*
 - `tsconfig.json` for `netlify/functions/**` and `scripts/**`.
 - GitHub Actions workflow running these jobs: `unit`, `e2e` (Playwright), and later `db` (Supabase local) and `functions`.
 - `.env.example` listing every variable, with no values.

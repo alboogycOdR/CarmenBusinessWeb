@@ -3,9 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "description": "Static course and book storefront for Carmen",
+  "engines": {
+    "node": ">=22.12 <23"
+  },
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node --test tests/site.test.js tests/checkout.test.js",
-    "test:e2e": "node tests/e2e.js"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test tests/site.test.js tests/checkout.test.js tests/repo.test.js",
+    "test:e2e": "node tests/e2e.js",
+    "check": "npm run typecheck && npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3"
   }
 }
