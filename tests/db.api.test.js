@@ -44,6 +44,12 @@ function signJwt(payload, secret) {
 }
 const claims = (jwt) => JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString());
 
+/* Throwaway credential for a temporary test user (deleted after the test).
+ * Random per run; the fixed character classes satisfy the staff password policy. */
+function randomTestPassword() {
+  return ["A", "a", "1", "!"].join("") + crypto.randomBytes(18).toString("base64url");
+}
+
 /* RFC 6238 TOTP (SHA-1, 30 s, 6 digits), as used by authenticator apps. */
 function totp(base32Secret, at = Date.now()) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -120,7 +126,7 @@ test("public sign-up is disabled (staff are created by an owner only)", async ()
 
 test("staff: privileges appear only after TOTP MFA (aal2)", async (t) => {
   const email = `admin-${crypto.randomUUID()}@example.com`;
-  const password = `Aa1!${crypto.randomBytes(18).toString("base64url")}`;
+  const password = randomTestPassword();
   const created = await call("/auth/v1/admin/users", { key: ENV.service, method: "POST", body: { email, password, email_confirm: true } });
   assert.strictEqual(created.status, 200, created.text);
   const userId = created.json.id;
