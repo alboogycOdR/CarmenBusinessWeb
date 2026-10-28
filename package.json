@@ -5,7 +5,7 @@
   "description": "Static course and book storefront for Carmen",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node --test tests/site.test.js",
+    "test": "node --test tests/site.test.js tests/checkout.test.js",
     "test:e2e": "node tests/e2e.js"
   }
 }

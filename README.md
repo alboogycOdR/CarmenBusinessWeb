@@ -1,37 +1,73 @@
 # Carmen Business Web
 
-A fast, dependency-free static storefront for selling **courses, books and bundles**: home, catalogue (courses / books / shop), product detail, about and contact pages, newsletter signup, dark mode, mobile menu, SEO metadata and accessibility basics. Structure and tone follow the author-coach brand model (hero, featured offers, bundle, story, testimonials, email capture).
+A fast, dependency-free static storefront for selling **courses, books, workbooks and bundles**, modelled on a shop-first author/coach site: the home page *is* the shop.
 
-## Edit the content (no code needed)
+| Feature | Where |
+|---|---|
+| Shop with search, price range, category filters, sort, pagination (filters live in the URL, so they are shareable) | `index.html` |
+| Product page: quantity, Add to cart, optional Buy now, tabs (Description / Additional information / Reviews), related products, `Product` + `AggregateRating` JSON-LD | `product.html?id=...` |
+| Cart drawer + cart page, quantities, remove, discount codes, persistent across visits | all pages, `cart.html` |
+| Real checkout (Stripe) via a tiny serverless function, plus a no-server fallback | `netlify/functions/checkout.js`, `success.html` |
+| Reviews page: rating summary, distribution bars, search, sort, pagination | `reviews.html` |
+| Free resources / lead magnets, About, Contact, Terms, Privacy, 404 | `free.html` `about.html` `contact.html` `terms.html` `privacy.html` `404.html` |
+| "10% off your first order" newsletter popup that auto-applies the code | `popup` in config |
+| Dark mode, mobile menu, skip link, keyboard-accessible tabs/dialogs, reduced motion | everywhere |
 
-Everything is in **`assets/js/site-config.js`**: brand name, email, social links, hero copy, nav, about text, testimonials and the `products` list.
+## 1. Edit the content (no code needed)
 
-Add a product by copying an entry in `products` and giving it a unique `id`, `type` (`course` | `book` | `bundle`), `price`, optional `compareAt` (shows the discount), `color` (cover gradient) and `features`.
+Everything is in **`assets/js/site-config.js`**: brand, announcement bar, nav, shop intro, products, reviews, free resources, about text, discount codes and popup. Placeholder copy, prices and reviews **must be replaced** with the client's real content (and the Terms/Privacy templates reviewed by a professional).
 
-### Taking payments
-Set each product's `checkoutUrl` to a hosted checkout link: Stripe Payment Link, Paystack/Flutterwave link, Gumroad, Teachable/Thinkific, Amazon, etc. The "Buy now" button sends buyers there, so no card data touches this site. With `checkoutUrl: ""` the page shows "Coming soon: get notified". Only `http(s)` or relative URLs are accepted.
+Add a product by copying an entry in `products`: unique `id`, `type` (`course` | `book` | `bundle`), `price`, optional `compareAt` (shows "Save n%"), `tags` (extra filter categories), `badge`, `included`, `info` (the "Additional information" table). Product mockups: drop images in `assets/img/` and set `image: "assets/img/my-course.webp"`; blank = a generated cover using `color`.
 
-### Forms
-Set `brand.formEndpoint` to a Formspree/Basin/ConvertKit-style endpoint that accepts JSON POST. If empty, forms open the visitor's email app addressed to `brand.email`.
+Re-brand by editing the `:root` tokens at the top of `assets/css/styles.css` (`--brand` is the accent colour) and the logo text/script font.
 
-## Run, test, deploy
+## 2. Take payments
+
+Pick one (or combine):
+
+**A. Cart checkout with Stripe (recommended).** Deploy to Netlify, set two environment variables, and point the site at the function:
+
+| Variable | Value |
+|---|---|
+| `STRIPE_SECRET_KEY` | `sk_test_...` while testing, `sk_live_...` to go live |
+| `SITE_URL` | `https://your-domain.com` |
+
+Then in `site-config.js` set `checkout.endpoint: "/.netlify/functions/checkout"`. The browser sends only product ids, quantities and a code; **prices and discounts are re-computed on the server from the same config file**, so they cannot be tampered with. Discount codes become single-use Stripe coupons. After payment Stripe returns the buyer to `success.html`, which clears the cart.
+
+Fulfilment (emailing course access/downloads) is not included: use a Stripe webhook into your course platform/email tool, or Stripe's receipt email with a link to the member area. Tell the client to decide this before launch.
+
+**B. Hosted links, no server.** Set a product's `checkoutUrl` (Stripe Payment Link, PayPal, Gumroad, Teachable...). The product page gains a **Buy now** button, and with no `checkout.endpoint` the cart offers a "Pay for ..." link per item plus an "Email my order" option.
+
+## 3. Forms
+
+Set `brand.formEndpoint` to a Formspree/Basin/ConvertKit-style endpoint that accepts a JSON POST (`{name, email, message}`). Blank = forms open the visitor's email app addressed to `brand.email`.
+
+## 4. Develop, test, deploy
+
 ```bash
 npm start            # http://localhost:8080
-npm test             # unit + content/link validation (Node only)
-npm run test:e2e     # headless browser smoke test (needs playwright)
+npm test             # 21 unit + content/link + checkout-function tests (Node only)
+npm install --no-save playwright && npm run test:e2e   # 13 browser scenarios
 ```
-Deploy the folder as-is to Netlify, Vercel, Cloudflare Pages, GitHub Pages or any static host. Replace `assets/favicon.svg`, and optionally add real cover images by extending `cover()` in `assets/js/main.js`.
+
+`SHOTS=/some/dir npm run test:e2e` also saves full-page screenshots at desktop and mobile widths.
+
+Deploy the folder as-is to Netlify (config in `netlify.toml`: headers, 404, functions). Without the checkout function it also works on any static host (Cloudflare Pages, Vercel, GitHub Pages).
 
 ## Layout
+
 ```
-index.html courses.html books.html shop.html product.html about.html contact.html 404.html
-assets/css/styles.css      design tokens + styles (edit :root colours/fonts)
-assets/js/site-config.js   all content
-assets/js/lib.js           pure helpers (escaping, price, URL safety), unit-tested
-assets/js/main.js          renders header/footer/sections
-tests/                     site.test.js (unit), e2e.js (browser)
+index.html product.html cart.html reviews.html free.html about.html contact.html success.html terms.html privacy.html 404.html
+assets/css/styles.css      design tokens + styles
+assets/js/site-config.js   ALL content (also read by the checkout function)
+assets/js/lib.js           pure logic: filtering, cart maths, reviews, URL safety (unit-tested)
+assets/js/main.js          rendering + interactions
+netlify/functions/checkout.js   Stripe Checkout session builder (unit-tested with a mocked Stripe)
+tests/                     site.test.js, checkout.test.js, e2e.js
 ```
 
-## Notes
-- Content is rendered client-side from the config; search engines that run JS (Google) index it, and product pages emit `Product` JSON-LD. If server-rendered HTML becomes important, add a small build step that pre-renders from the same config.
-- All placeholder text, prices and testimonials must be replaced with the client's real content before launch.
+## Design notes and trade-offs
+
+- Cart contents and the discount code live in the visitor's `localStorage`; the popup's code is public by design (a first-order incentive). Only the server function decides what is actually charged.
+- Content is rendered client-side from the config. Google indexes it (and product pages emit JSON-LD), but if SEO becomes critical add a small pre-render step that reuses `site-config.js`.
+- All user-visible config text is HTML-escaped; checkout/image/social URLs are restricted to `http(s)` or relative links.
