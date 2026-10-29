@@ -41,6 +41,7 @@
   const icon = {
     cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
     search: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+    filter: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>',
   };
 
   function renderChrome() {
@@ -254,12 +255,19 @@
     view().innerHTML = `
       <header class="page-head"><div class="container"><h1>${esc(S.shop.title)}</h1><p>${esc(S.shop.intro)}</p></div></header>
       <div class="container shop">
-        <button class="btn btn-ghost filter-toggle" type="button" aria-expanded="false" aria-controls="filters">Filters</button>
         <form id="filters" class="filters" role="search" novalidate>
           <div class="searchbox"><label class="sr" for="f-q">Search products</label><input id="f-q" type="search" name="q" placeholder="Search products…" value="${esc(q.get("q") || "")}"><button class="btn btn-icon" type="submit" aria-label="Search">${icon.search}</button></div>
-          <fieldset><legend>Price</legend><div class="price-range"><label class="sr" for="f-min">Minimum price</label><input id="f-min" type="number" name="min" min="0" placeholder="${esc(money(lo))}" value="${esc(q.get("min") || "")}"><span>to</span><label class="sr" for="f-max">Maximum price</label><input id="f-max" type="number" name="max" min="0" placeholder="${esc(money(hi))}" value="${esc(q.get("max") || "")}"></div></fieldset>
-          <fieldset><legend>Categories</legend>${cats.map((c) => `<label class="check"><input type="checkbox" name="cat" value="${esc(c)}"${initialCats.indexOf(c) > -1 ? " checked" : ""}> ${esc(c)}</label>`).join("")}</fieldset>
-          <button type="button" class="link" data-reset>Clear all filters</button>
+          <button class="filter-toggle" type="button" aria-expanded="false" aria-controls="filter-panel">${icon.filter} Filter products</button>
+          <div id="filter-panel" class="filter-panel">
+            <fieldset><legend>Price</legend>
+              <div class="range" aria-hidden="true">
+                <input id="r-min" type="range" min="${lo}" max="${hi}" step="1" value="${esc(q.get("min") || lo)}" tabindex="-1">
+                <input id="r-max" type="range" min="${lo}" max="${hi}" step="1" value="${esc(q.get("max") || hi)}" tabindex="-1">
+              </div>
+              <div class="price-range"><label class="sr" for="f-min">Minimum price</label><input id="f-min" type="number" name="min" min="0" placeholder="${esc(money(lo))}" value="${esc(q.get("min") || "")}"><span aria-hidden="true">–</span><label class="sr" for="f-max">Maximum price</label><input id="f-max" type="number" name="max" min="0" placeholder="${esc(money(hi))}" value="${esc(q.get("max") || "")}"></div></fieldset>
+            <fieldset><legend>Categories</legend>${cats.map((c) => `<label class="check"><input type="checkbox" name="cat" value="${esc(c)}"${initialCats.indexOf(c) > -1 ? " checked" : ""}> ${esc(c)}</label>`).join("")}</fieldset>
+            <button type="button" class="link" data-reset>Clear all filters</button>
+          </div>
         </form>
         <section aria-live="polite"><div class="toolbar"><p id="count" class="muted"></p>
           <label class="sort">Sort <select id="f-sort" name="sort"><option value="featured">Featured</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="title">Title A–Z</option></select></label></div>
@@ -298,12 +306,38 @@
     form.addEventListener("change", () => { pageNo = 1; draw(); });
     sortEl.addEventListener("change", () => { pageNo = 1; draw(); });
     view().addEventListener("click", (e) => {
-      if (e.target.closest("[data-reset]")) { form.reset(); $$("input", form).forEach((i) => { if (i.type === "checkbox") i.checked = false; else i.value = ""; }); pageNo = 1; draw(); }
+      if (e.target.closest("[data-reset]")) { form.reset(); $$("input", form).forEach((i) => { if (i.type === "checkbox") i.checked = false; else if (i.type !== "range") i.value = ""; }); pageNo = 1; draw(); }
       const a = e.target.closest(".pager a");
       if (a) { e.preventDefault(); pageNo = Number(a.getAttribute("data-page")); draw(); $(".shop").scrollIntoView(); }
     });
     const tgl = $(".filter-toggle");
-    tgl.addEventListener("click", () => tgl.setAttribute("aria-expanded", String(form.classList.toggle("open"))));
+    tgl.addEventListener("click", () => tgl.setAttribute("aria-expanded", String($("#filter-panel").classList.toggle("open"))));
+
+    // Dual-handle price slider, kept in sync with the number inputs (which carry the
+    // value, the URL state and keyboard access). A handle at its end means "no limit".
+    const rMin = $("#r-min"), rMax = $("#r-max"), fMin = $("#f-min"), fMax = $("#f-max"), range = $(".range");
+    const paint = () => {
+      const span = hi - lo || 1;
+      range.style.setProperty("--lo", ((Number(rMin.value) - lo) / span) * 100 + "%");
+      range.style.setProperty("--hi", ((Number(rMax.value) - lo) / span) * 100 + "%");
+    };
+    const fromSlider = (e) => {
+      if (Number(rMin.value) > Number(rMax.value)) (e.target === rMin ? rMin : rMax).value = e.target === rMin ? rMax.value : rMin.value;
+      fMin.value = Number(rMin.value) > lo ? rMin.value : "";
+      fMax.value = Number(rMax.value) < hi ? rMax.value : "";
+      paint();
+    };
+    [rMin, rMax].forEach((r) => {
+      r.addEventListener("input", (e) => { e.stopPropagation(); fromSlider(e); pageNo = 1; draw(); });
+      r.addEventListener("change", (e) => e.stopPropagation());
+    });
+    [fMin, fMax].forEach((f) => f.addEventListener("input", () => {
+      rMin.value = fMin.value === "" ? lo : Math.max(lo, Math.min(hi, Number(fMin.value)));
+      rMax.value = fMax.value === "" ? hi : Math.max(lo, Math.min(hi, Number(fMax.value)));
+      paint();
+    }));
+    form.addEventListener("reset", () => setTimeout(() => { rMin.value = lo; rMax.value = hi; paint(); }));
+    paint();
     draw();
   }
 
