@@ -57,7 +57,7 @@ You are continuing an in-progress project. Before you change anything, read this
 
 **Milestones:**
 - **M1 Foundation:** done.
-- **M2 Store on the database, with checkout and the polished look:** PR 2 merged; PR 3 + polish in review (#8).
+- **M2 Store on the database, with checkout and the polished look:** done (PRs 2–3 + polish merged).
 - **M3 First real sale, paid and delivered:** code complete (PRs 4–6 merged); the sandbox purchase on staging waits for D16 + a staging site.
 - **M4 Admin and operations:** PR 8, 7, 9, 10, 11.
 - **M5 Launch:** PR 12–13, the client's content and the owner's sign-off.
