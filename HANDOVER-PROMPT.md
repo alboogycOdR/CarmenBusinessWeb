@@ -35,10 +35,13 @@ You are continuing an in-progress project. Before you change anything, read this
 
 - #5 PR 2: storefront built from the database, pre-rendered product pages, sitemap.
 
-**Open:**
-- **#8**, `feat/03-to-main` → `main`: PR 3 (Payfast checkout: `create_pending_order()`, `/api/checkout`, `/api/order-status`, scheduled expiry, `R1 997.00` prices, honest success page) plus the UI polish (#7, squashed). #6 and #7 were accidentally merged into their stacked branches instead of `main`; #8 lands the identical tree on `main` without the commit that briefly held a reference-site screenshot. After it merges, delete `feat/02-catalogue-from-db`, `feat/03-payfast-checkout` and `feat/home-polish`. **Lesson:** when stacking PRs, retarget the next PR to `main` *before* its parent merges, or the owner may merge it into the stale base.
+- #8: PR 3 (Payfast checkout) + UI polish, landed on `main` (main CI green at 7f5abbb).
 
-**Remaining backlog** (details in `docs/02-implementation-backlog.md`). Order: PR 4 → 5 → 6 → 8 → 7 → 9 → 10 → 11 → 12 → 13.
+**Open:**
+- **#9 PR 4**, `feat/04-payfast-itn` → `main`: Payfast ITN (`/api/payfast/itn`, the 4 checks; source IP uses Payfast's *published server ranges*, because its hostnames resolve to inbound load balancers), `process_payfast_itn()` + `confirm_payment()` SQL, replay tool `scripts/replay-event.mts`, order-status items, success-page delivery list. 226 pgTAP, 40 integration, 23 mutations caught. Needs the D16 sandbox run on staging.
+- **Owner to delete** stale branches `feat/02-catalogue-from-db`, `feat/03-payfast-checkout`, `feat/home-polish`, `feat/03-to-main` (all content is on `main`; the session's git proxy refuses branch deletion with 403).
+
+**Remaining backlog** (details in `docs/02-implementation-backlog.md`). Order: PR 5 → 6 → 8 → 7 → 9 → 10 → 11 → 12 → 13 (PR 4 is #9).
 - **PR 4:** Payfast ITN function (4 checks, dedupe `pf_payment_id:payment_status`) and `confirm_payment()` SQL (creates fulfilments, tokens and the outbox row idempotently), plus a replay tool. Extends `order-status` with items. **Needs D16** (Payfast sandbox account and a staging URL) for the real sandbox run; the fixture-based tests can be built without it.
 - **PR 5:** private storage bucket, delivery tokens, `/api/download`.
 - **PR 6:** Resend outbox, email templates, external and manual-access delivery, mixed delivery.
@@ -116,6 +119,6 @@ You are continuing an in-progress project. Before you change anything, read this
 - **Writing files:** never write a raw U+2028 character into source code; use escape sequences.
 
 ## 8. First steps in the new session
-1. `git fetch`, then check the state of #8: CI, review comments, merged or not.
+1. `git fetch`, then check the state of #9: CI, review comments, merged or not.
 2. Report the status back to the owner in plain language.
 3. Ask which to do next. The recommendation is to finish the merges, then PR 4 (ITN). If the owner prioritises the look, do the design pass on the remaining pages, or add real assets once Carmen supplies them.
