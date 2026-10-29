@@ -202,11 +202,34 @@ export function sitemapXml(siteUrl: string, products: StorefrontProduct[]): stri
 }
 
 export function robotsTxt(siteUrl: string): string {
-  return `User-agent: *\nAllow: /\nDisallow: /cart.html\nDisallow: /success.html\nSitemap: ${siteUrl}/sitemap.xml\n`;
+  return `User-agent: *\nAllow: /\nDisallow: /cart.html\nDisallow: /success.html\nDisallow: /admin/\nDisallow: /api/\nSitemap: ${siteUrl}/sitemap.xml\n`;
 }
 
-/* Fetch published rows through the public API, exactly as any browser could. */
-export async function fetchCatalogRows(env: NodeJS.ProcessEnv): Promise<CatalogRow[]> {
+/* The public Supabase settings the browser may know (URL + anon key). */
+export interface PublicSupabase { url: string; anonKey: string }
+
+/* The admin's browser config: only the public URL and anon key (RLS-limited). */
+export function adminConfigScript(sb: PublicSupabase | null): string {
+  const cfg = sb ? { supabaseUrl: sb.url.replace(/\/+$/, ""), anonKey: sb.anonKey } : {};
+  return `window.ADMIN_CONFIG = ${JSON.stringify(cfg).replace(/</g, "\\u003c")};\n`;
+}
+
+/* Netlify _headers for the admin (PR 8): the CSP must name this environment's
+ * Supabase origin, so it is generated here rather than kept in netlify.toml. */
+export function headersFile(sb: PublicSupabase | null): string {
+  let origin = "";
+  if (sb) {
+    try { origin = new URL(sb.url).origin; } catch { throw new BuildError(`SUPABASE_URL is not a URL: ${sb.url}`); }
+  }
+  const csp = [
+    "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data:",
+    `connect-src 'self'${origin ? " " + origin : ""}`, "form-action 'self'", "frame-ancestors 'none'", "base-uri 'none'",
+  ].join("; ");
+  const rules = ["Content-Security-Policy: " + csp, "X-Robots-Tag: noindex, nofollow", "Cache-Control: no-store"];
+  return ["/admin", "/admin/*"].map((p) => `${p}\n${rules.map((r) => "  " + r).join("\n")}`).join("\n") + "\n";
+}
+
+export function resolvePublicSupabase(env: NodeJS.ProcessEnv): PublicSupabase {
   let url = env.SUPABASE_URL;
   let key = env.SUPABASE_ANON_KEY;
   if (!url || !key) {
@@ -219,8 +242,13 @@ export async function fetchCatalogRows(env: NodeJS.ProcessEnv): Promise<CatalogR
       throw new BuildError("no SUPABASE_URL/SUPABASE_ANON_KEY and no local Supabase running (npm run db:start)");
     }
   }
-  const res = await fetch(`${String(url).replace(/\/+$/, "")}/rest/v1/public_catalog?select=*&order=sort.asc,slug.asc`, {
-    headers: { apikey: String(key), Authorization: `Bearer ${key}`, Accept: "application/json" },
+  return { url: String(url).replace(/\/+$/, ""), anonKey: String(key) };
+}
+
+/* Fetch published rows through the public API, exactly as any browser could. */
+export async function fetchCatalogRows(sb: PublicSupabase): Promise<CatalogRow[]> {
+  const res = await fetch(`${sb.url}/rest/v1/public_catalog?select=*&order=sort.asc,slug.asc`, {
+    headers: { apikey: sb.anonKey, Authorization: `Bearer ${sb.anonKey}`, Accept: "application/json" },
   });
   if (!res.ok) throw new BuildError(`catalogue fetch failed: HTTP ${res.status} ${await res.text()}`);
   return (await res.json()) as CatalogRow[];
@@ -237,7 +265,7 @@ function copyDir(src: string, dst: string): void {
 
 export interface BuildResult { outDir: string; products: number; pages: string[] }
 
-export function buildSite(rows: CatalogRow[], opts: { outDir: string; siteUrl: string; root?: string; allowEmpty?: boolean }): BuildResult {
+export function buildSite(rows: CatalogRow[], opts: { outDir: string; siteUrl: string; root?: string; allowEmpty?: boolean; supabase?: PublicSupabase | null }): BuildResult {
   const root = opts.root ?? ROOT;
   const outDir = path.resolve(opts.outDir);
   // fs.rmSync below deletes outDir: only ever inside the project or the OS temp dir.
@@ -275,6 +303,11 @@ export function buildSite(rows: CatalogRow[], opts: { outDir: string; siteUrl: s
 
   fs.writeFileSync(path.join(outDir, "sitemap.xml"), sitemapXml(opts.siteUrl, products));
   fs.writeFileSync(path.join(outDir, "robots.txt"), robotsTxt(opts.siteUrl));
+
+  // Staff admin (PR 8): static shell, its public config and its security headers.
+  copyDir(path.join(root, "admin"), path.join(outDir, "admin"));
+  fs.writeFileSync(path.join(outDir, "admin/config.js"), adminConfigScript(opts.supabase ?? null));
+  fs.writeFileSync(path.join(outDir, "_headers"), headersFile(opts.supabase ?? null));
   return { outDir, products: products.length, pages };
 }
 
@@ -282,9 +315,10 @@ async function main(argv: string[]): Promise<void> {
   const arg = (name: string) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const rowsFile = arg("--rows");
   const outDir = arg("--out") ?? path.join(ROOT, "dist");
-  const rows = rowsFile ? (JSON.parse(fs.readFileSync(rowsFile, "utf8")) as CatalogRow[]) : await fetchCatalogRows(process.env);
+  const supabase = rowsFile ? null : resolvePublicSupabase(process.env);
+  const rows = rowsFile ? (JSON.parse(fs.readFileSync(rowsFile, "utf8")) as CatalogRow[]) : await fetchCatalogRows(supabase!);
   const siteUrl = resolveSiteUrl(process.env);
-  const result = buildSite(rows, { outDir, siteUrl, allowEmpty: process.env.ALLOW_EMPTY_CATALOG === "1" });
+  const result = buildSite(rows, { outDir, siteUrl, allowEmpty: process.env.ALLOW_EMPTY_CATALOG === "1", supabase });
   console.log(`built ${result.pages.length} pages (${result.products} products) into ${path.relative(ROOT, result.outDir) || "."} for ${siteUrl}`);
 }
 

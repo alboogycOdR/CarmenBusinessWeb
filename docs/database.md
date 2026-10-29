@@ -175,3 +175,9 @@ A denial is a plain page with the reason and a link to the contact page. The ord
 
 Setup, limits and troubleshooting: [`email.md`](email.md).
 
+## 11. Admin audit (PR 8)
+
+- `record_admin_action(actor, role, action, entity, entity_id, detail)` appends an `ACTION` row: sign-ins, staff grants, revocations and MFA resets. It is SECURITY DEFINER with EXECUTE for the service role only, called by the server *after* it has verified the staff session. Owner scripts record actor `null` with role `script`.
+- Owner and admin read the log at aal2 (RLS). Support and aal1 sessions read nothing.
+- Staff access rules and setup: [`admin.md`](admin.md).
+

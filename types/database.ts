@@ -376,6 +376,9 @@ isOneToOne: false
                            },
 "process_payfast_itn":
 { Args: { "p_amount_minor": number,"p_check_error": string,"p_event_key": string,"p_livemode": boolean,"p_payload": Json,"p_payment_status": string,"p_reference": string,"p_txn_id": string }; Returns: Json
+                           },
+"record_admin_action":
+{ Args: { "p_action": string,"p_actor": string,"p_detail"?: Json,"p_entity": string,"p_entity_id": string,"p_role": string }; Returns: number
                            }
           }
           Enums: {

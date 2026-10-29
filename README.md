@@ -18,6 +18,7 @@ A fast static storefront for selling **courses, books, guides, templates and bun
 > - **Confirmation:** an order becomes paid **only** through Payfast's notification at `/api/payfast/itn`, after all four checks Payfast requires: signature, Payfast's server IPs, merchant and exact amount, and Payfast's own `VALID` confirmation. One transaction marks it paid, creates its deliveries and queues the email. Repeated notifications change nothing.
 > - **Success page:** says "paid" only when the server does, and lists what each item delivers.
 > - **Failed notifications** are stored and can be re-processed safely with `node scripts/replay-event.mts <event id>` ([`docs/database.md`](docs/database.md) §8).
+> - **Admin (`/admin/`):** staff sign in with a password **and an authenticator app**. Nothing is visible before the second step. Roles are owner, admin and support. Staff are added, reset and removed with `node scripts/grant-admin.mts`. Every sign-in and change is in an append-only audit log. Guide: [`docs/admin.md`](docs/admin.md).
 > - **Email:** one email per order carries the receipt and every delivery (download buttons, course links, honest manual-access timing). It is sent the moment payment is confirmed, retried with backoff through an outbox if Resend is down, and never sent twice. Setup, DNS and operations: [`docs/email.md`](docs/email.md). Preview the emails with `node scripts/preview-email.mts`.
 > - **Downloads:** files sit in a private storage bucket. A buyer's link (`/api/download?t=…`) works for 7 days and 5 downloads. It opens a page with a Download button, which hands out a 60-second signed URL. Links go out in the order email; support can issue fresh ones with `node scripts/issue-download-links.mts <reference> [--replace]` ([`docs/database.md`](docs/database.md) §9).
 > - **Netlify environment:** `PAYFAST_MODE`, `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, `SITE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (see `.env.example`).
@@ -85,12 +86,14 @@ assets/js/site-config.js   site content (brand, copy, reviews, popup); no produc
 assets/js/lib.js           pure logic: filtering, cart maths, reviews, URL safety (unit-tested)
 assets/js/render.js        HTML templates shared by the browser and the build
 assets/js/main.js          page behaviour + interactions
+admin/                     staff admin: sign-in, TOTP, dashboard (static; strict CSP via generated _headers)
 scripts/build.mts          database → dist/ (catalog.js, product pages, sitemap, robots)
 scripts/replay-event.mts   re-process a stored Payfast notification (safe to repeat)
 scripts/issue-download-links.mts  issue download links for a paid order (support)
 scripts/grant-manual-access.mts   confirm hand-granted course access; queues the "access is ready" email
 scripts/preview-email.mts         render every email with sample data (design review)
-netlify/functions/         checkout, payfast-itn, order-status, download; scheduled: send-emails, expire-orders
+scripts/grant-admin.mts           add, reset or remove staff (owner-run; no sign-up page exists)
+netlify/functions/         checkout, payfast-itn, order-status, download, admin-session, admin-audit; scheduled: send-emails, expire-orders
 netlify/lib/               Payfast signing + ITN checks, storage signing, email outbox + templates + Resend, config, database RPC, HTTP helpers
 tests/                     unit (site, build, repo), build output, database API, e2e; fixtures/
 supabase/                  config, migrations, seed, pgTAP tests, rollback scripts
