@@ -22,10 +22,109 @@
       var dims = p.image.width && p.image.height ? ' width="' + esc(p.image.width) + '" height="' + esc(p.image.height) + '"' : "";
       return '<img src="' + esc(img) + '"' + srcset + dims + ' alt="' + esc(p.image.alt || p.title) + '" loading="lazy" decoding="async">';
     }
-    var c = p.color || ["#e50069", "#ff7eb3"];
-    return '<div class="cover cover-' + esc(p.type) + '" style="--c1:' + esc(c[0]) + ";--c2:" + esc(c[1]) + '" role="img" aria-label="' + esc(p.title) + '">' +
-      '<span class="cover-type">' + esc(L.TYPE_LABEL[p.type] || "") + "</span>" +
-      '<span class="cover-title">' + esc(p.title.split(":")[0]) + "</span></div>";
+    return mockup(p);
+  }
+
+  /* ---------- Product mockups ------------------------------------------------
+   * Until real product photos are supplied (products.images), each product gets a
+   * device composition in the style of the reference shop: a laptop for courses,
+   * a 3D book for books, fanned printables for guides/templates, all of them for
+   * bundles. Drawn as inline SVG from the product's own colours and title, on a
+   * light tile. All text is escaped; ids are namespaced by the (validated) slug. */
+  var HEX = /^#[0-9a-fA-F]{3,8}$/;
+
+  function wrap(text, maxChars, maxLines) {
+    var words = String(text).split(/\s+/).filter(Boolean), lines = [], line = "";
+    for (var i = 0; i < words.length; i++) {
+      var next = line ? line + " " + words[i] : words[i];
+      if (next.length > maxChars && line) { lines.push(line); line = words[i]; } else line = next;
+    }
+    if (line) lines.push(line);
+    if (lines.length > maxLines) { lines = lines.slice(0, maxLines); lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, "") + "…"; }
+    return lines;
+  }
+
+  function textBlock(lines, x, y, size, fill, anchor, weight) {
+    return '<text x="' + x + '" y="' + y + '" fill="' + fill + '" font-family="Lora, Georgia, serif" font-weight="' + (weight || 600) +
+      '" font-size="' + size + '" text-anchor="' + (anchor || "middle") + '">' +
+      lines.map(function (l, i) { return '<tspan x="' + x + '" dy="' + (i ? size * 1.15 : 0) + '">' + esc(l) + "</tspan>"; }).join("") + "</text>";
+  }
+
+  function sheet(x, y, w, h, rot, accent) {
+    var lines = "";
+    for (var i = 0; i < 6; i++) lines += '<rect x="' + (x + 14) + '" y="' + (y + 46 + i * 18) + '" width="' + (w - 28 - (i % 3) * 18) + '" height="5" rx="2.5" fill="#e6e6ea"/>';
+    return '<g transform="rotate(' + rot + " " + (x + w / 2) + " " + (y + h / 2) + ')">' +
+      '<rect x="' + (x + 3) + '" y="' + (y + 5) + '" width="' + w + '" height="' + h + '" rx="4" fill="#000" opacity=".06"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="4" fill="#fff" stroke="#ececf0"/>' +
+      '<rect x="' + (x + 14) + '" y="' + (y + 16) + '" width="' + (w * 0.55) + '" height="12" rx="3" fill="' + accent + '"/>' + lines + "</g>";
+  }
+
+  function laptop(x, y, w, gid, title) {
+    var h = w * 0.62, sx = x + w * 0.035, sy = y + w * 0.035, sw = w * 0.93, sh = h - w * 0.07;
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + w * 0.03 + '" fill="#1d1d21"/>' +
+      '<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sh + '" rx="3" fill="url(#' + gid + ')"/>' +
+      '<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sh * 0.45 + '" rx="3" fill="#fff" opacity=".10"/>' +
+      textBlock(wrap(title, 18, 2), x + w / 2, sy + sh * 0.46, w * 0.068, "#fff") +
+      '<circle cx="' + (sx + sw / 2) + '" cy="' + (sy + sh * 0.8) + '" r="' + w * 0.04 + '" fill="#fff" opacity=".9"/>' +
+      '<path d="M' + (sx + sw / 2 - w * 0.012) + " " + (sy + sh * 0.8 - w * 0.02) + "l" + w * 0.032 + " " + w * 0.02 + "l-" + w * 0.032 + " " + w * 0.02 + 'z" fill="#1d1d21"/>' +
+      '<path d="M' + (x - w * 0.08) + " " + (y + h) + "H" + (x + w * 1.08) + "l-" + w * 0.035 + " " + w * 0.045 + "H" + (x - w * 0.045) + 'z" fill="#d7d7dd"/>' +
+      '<rect x="' + (x + w * 0.42) + '" y="' + (y + h) + '" width="' + w * 0.16 + '" height="' + w * 0.014 + '" rx="2" fill="#b9b9c2"/>';
+  }
+
+  function phone(x, y, w, gid) {
+    var h = w * 1.95, bars = "";
+    for (var i = 0; i < 3; i++) bars += '<rect x="' + (x + w * 0.2) + '" y="' + (y + h * (0.52 + i * 0.11)) + '" width="' + w * (0.6 - i * 0.12) + '" height="' + w * 0.07 + '" rx="2" fill="#fff" opacity=".85"/>';
+    return '<rect x="' + (x + 3) + '" y="' + (y + 5) + '" width="' + w + '" height="' + h + '" rx="' + w * 0.16 + '" fill="#000" opacity=".08"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + w * 0.16 + '" fill="#1d1d21"/>' +
+      '<rect x="' + (x + w * 0.07) + '" y="' + (y + w * 0.12) + '" width="' + w * 0.86 + '" height="' + (h - w * 0.24) + '" rx="' + w * 0.1 + '" fill="url(#' + gid + ')" opacity=".92"/>' +
+      '<circle cx="' + (x + w / 2) + '" cy="' + (y + h * 0.3) + '" r="' + w * 0.17 + '" fill="#fff" opacity=".9"/>' + bars;
+  }
+
+  function book(x, y, w, gid, title, label) {
+    var h = w * 1.42, spine = w * 0.09;
+    return '<rect x="' + (x + 6) + '" y="' + (y + 8) + '" width="' + w + '" height="' + h + '" rx="4" fill="#000" opacity=".12"/>' +
+      '<rect x="' + (x + w - 4) + '" y="' + (y + 5) + '" width="10" height="' + (h - 10) + '" fill="#f4f0e8" stroke="#e6e0d4"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="4" fill="url(#' + gid + ')"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + spine + '" height="' + h + '" rx="3" fill="#000" opacity=".22"/>' +
+      '<rect x="' + (x + spine) + '" y="' + y + '" width="' + (w - spine) + '" height="' + h * 0.5 + '" fill="#fff" opacity=".08"/>' +
+      '<text x="' + (x + spine + w * 0.1) + '" y="' + (y + h * 0.13) + '" fill="#fff" opacity=".85" font-family="Roboto, Arial, sans-serif" font-size="' + w * 0.065 + '" letter-spacing="2">' + esc(label.toUpperCase()) + "</text>" +
+      textBlock(wrap(title, 11, 4), x + spine + w * 0.1, y + h * 0.62, w * 0.105, "#fff", "start");
+  }
+
+  function tablet(x, y, w, gid, title) {
+    var h = w * 1.33;
+    return '<rect x="' + (x + 4) + '" y="' + (y + 6) + '" width="' + w + '" height="' + h + '" rx="' + w * 0.07 + '" fill="#000" opacity=".08"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + w * 0.07 + '" fill="#1d1d21"/>' +
+      '<rect x="' + (x + w * 0.06) + '" y="' + (y + w * 0.06) + '" width="' + w * 0.88 + '" height="' + (h - w * 0.12) + '" rx="' + w * 0.03 + '" fill="#fff"/>' +
+      '<rect x="' + (x + w * 0.14) + '" y="' + (y + w * 0.14) + '" width="' + w * 0.72 + '" height="' + h * 0.42 + '" rx="3" fill="url(#' + gid + ')"/>' +
+      textBlock(wrap(title, 12, 2), x + w / 2, y + w * 0.14 + h * 0.24, w * 0.085, "#fff") +
+      [0, 1, 2, 3].map(function (i) { return '<rect x="' + (x + w * 0.14) + '" y="' + (y + h * (0.62 + i * 0.075)) + '" width="' + w * (0.72 - (i % 2) * 0.2) + '" height="' + w * 0.035 + '" rx="2" fill="#e6e6ea"/>'; }).join("");
+  }
+
+  function mockup(p) {
+    var c = Array.isArray(p.color) && p.color.length === 2 && HEX.test(p.color[0]) && HEX.test(p.color[1]) ? p.color : ["#e50069", "#ff7eb3"];
+    var id = "mk-" + String(p.id).replace(/[^a-z0-9-]/g, "");
+    var short = p.title.split(":")[0];
+    var label = L.TYPE_LABEL[p.type] ? L.TYPE_LABEL[p.type].replace(/s$/, "") : "";
+    var defs = '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient>' +
+      '<linearGradient id="' + id + '-s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c[1] + '"/><stop offset="1" stop-color="' + c[0] + '"/></linearGradient></defs>';
+    var ground = '<ellipse cx="300" cy="338" rx="250" ry="12" fill="#000" opacity=".06"/>';
+    var art;
+    if (p.type === "course") {
+      art = sheet(40, 70, 150, 200, -9, c[0]) + sheet(420, 92, 130, 175, 7, c[1]) + laptop(150, 92, 300, id, short) + phone(440, 168, 70, id + "-s");
+    } else if (p.type === "book") {
+      art = sheet(70, 80, 140, 190, -8, c[0]) + tablet(360, 96, 160, id + "-s", short) + book(200, 66, 170, id, short, label);
+    } else if (p.type === "bundle") {
+      art = sheet(30, 96, 130, 175, -10, c[0]) + laptop(110, 82, 270, id, short) + book(360, 104, 120, id + "-s", short, label) + phone(488, 186, 58, id);
+    } else { // guide, template: printable pages and a phone
+      art = sheet(150, 74, 170, 230, -12, c[0]) + sheet(205, 62, 170, 230, -2, c[1]) + sheet(260, 72, 170, 230, 9, c[0]) +
+        '<g transform="rotate(-2 290 190)">' + '<rect x="205" y="62" width="170" height="230" rx="4" fill="#fff" stroke="#ececf0"/>' +
+        '<rect x="205" y="62" width="170" height="78" rx="4" fill="url(#' + id + ')"/>' + textBlock(wrap(short, 14, 2), 290, 96, 16, "#fff") +
+        [0, 1, 2, 3, 4].map(function (i) { return '<rect x="222" y="' + (158 + i * 22) + '" width="' + (136 - (i % 2) * 30) + '" height="8" rx="4" fill="#e6e6ea"/>'; }).join("") + "</g>" +
+        phone(452, 150, 70, id + "-s");
+    }
+    return '<svg class="mockup" viewBox="25 40 550 357" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + esc(p.title) + '" focusable="false">' +
+      defs + ground + art + "</svg>";
   }
 
   function priceHtml(p) {
@@ -130,7 +229,7 @@
   }
 
   return {
-    urls: urls, money: money, media: media, priceHtml: priceHtml, stars: stars, fmtDate: fmtDate, card: card,
+    urls: urls, money: money, media: media, mockup: mockup, priceHtml: priceHtml, stars: stars, fmtDate: fmtDate, card: card,
     reviewItem: reviewItem, summaryHtml: summaryHtml, productView: productView, productJsonLd: productJsonLd,
   };
 });
