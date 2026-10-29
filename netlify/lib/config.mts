@@ -8,6 +8,8 @@ export class ConfigError extends Error {}
 export interface DbConfig {
   supabaseUrl: string;
   serviceKey: string;
+  /* The public key; used as `apikey` when calling the API with a staff token. Optional. */
+  anonKey?: string;
 }
 
 export interface CheckoutConfig extends DbConfig {
@@ -30,7 +32,8 @@ export function loadDbConfig(env: Env): DbConfig {
   const serviceKey = required(env, "SUPABASE_SERVICE_ROLE_KEY", problems);
   if (supabaseUrl && !/^https?:\/\/[^\s]+$/.test(supabaseUrl)) problems.push("SUPABASE_URL is not a URL");
   if (problems.length) throw new ConfigError(problems.join("; "));
-  return { supabaseUrl, serviceKey };
+  const anonKey = (env.SUPABASE_ANON_KEY ?? "").trim();
+  return { supabaseUrl, serviceKey, ...(anonKey ? { anonKey } : {}) };
 }
 
 export function loadCheckoutConfig(env: Env): CheckoutConfig {

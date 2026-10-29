@@ -47,9 +47,30 @@ const server = http.createServer((req, res) => {
     res.writeHead(404, { "Content-Type": "text/html" });
     return res.end(fs.readFileSync(path.join(root, "404.html")));
   }
-  res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream" });
+  res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream", ...headersFor(url.pathname) });
   res.end(fs.readFileSync(file));
 });
+
+/* Netlify's _headers file (written by the build), applied like Netlify does:
+ * "/admin" matches exactly, "/admin/*" matches the prefix. So the admin's CSP
+ * is really enforced in these browser tests. */
+function headersFor(pathname) {
+  const file = path.join(root, "_headers");
+  if (!fs.existsSync(file)) return {};
+  const out = {};
+  let rule = null;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    if (!/^\s/.test(line)) {
+      const pat = line.trim();
+      rule = pat.endsWith("/*") ? pathname.startsWith(pat.slice(0, -1)) : pathname === pat;
+    } else if (rule) {
+      const at = line.indexOf(":");
+      out[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+    }
+  }
+  return out;
+}
 const CONFIG = fs.readFileSync(path.join(root, "assets/js/site-config.js"), "utf8");
 const errors = [];
 let base;
@@ -406,6 +427,87 @@ async function deliverItn(fields) {
   return itnHandler(new Request(base + "/api/payfast/itn", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }), { ip: "197.97.145.150" });
 }
 
+/* Staff admin (PR 8): the owner's first sign-in exactly as Carmen will do it. */
+async function adminFlow(browser) {
+  const { grantAdmin } = await import("../scripts/grant-admin.mts");
+  const { totp } = await import("./support/totp.mts");
+  const cfg = { supabaseUrl: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY };
+  const email = `owner-e2e-${Date.now()}@example.com`;
+  const { link } = await grantAdmin(cfg, base, email, "owner", "Carmen");
+
+  const page = await newPage(browser, { width: 1280, height: 900 });
+  const res = await page.goto(base + "/admin/");
+  const csp = res.headers()["content-security-policy"] || "";
+  assert.match(csp, /default-src 'none'; script-src 'self'/, "strict CSP on /admin/");
+  assert.ok(csp.includes(new URL(process.env.SUPABASE_URL).origin), "CSP allows only this Supabase");
+  assert.strictEqual(res.headers()["x-robots-tag"], "noindex, nofollow");
+  await page.waitForSelector("h1:text('Sign in')");
+  assert.strictEqual(await page.locator("table, .tile").count(), 0, "nothing but the sign-in form before authentication");
+
+  // The one-time link from the owner script: GoTrue redirects to /admin/#access_token=…&type=recovery.
+  const hop = await fetch(link, { redirect: "manual" });
+  const fragment = (hop.headers.get("location") || "").split("#")[1];
+  assert.ok(fragment && fragment.includes("type=recovery"), "recovery link");
+  await page.goto("about:blank"); // arriving from Supabase's redirect is a full page load, not a hash change
+  await page.goto(`${base}/admin/#${fragment}`);
+  await page.waitForSelector("h1:text('Choose your password')");
+  assert.strictEqual(new URL(page.url()).hash, "", "tokens are removed from the address bar");
+  await page.fill("#pw", "short");
+  await page.fill("#pw2", "short");
+  await page.click("button[type=submit]");
+  await page.waitForSelector(".error:text('at least 12 characters')");
+  const pw = "E2e-Owner-" + Date.now() + "Aa";
+  await page.fill("#pw", pw);
+  await page.fill("#pw2", pw);
+  await page.click("button[type=submit]");
+
+  // Mandatory authenticator: QR code (allowed by CSP as a data: image) and the key.
+  await page.waitForSelector("h1:text('Set up your authenticator')");
+  const shot = async (name) => { if (process.env.SHOTS) { fs.mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: path.join(process.env.SHOTS, `admin-${name}.png`), fullPage: true }); } };
+  await shot("authenticator");
+  assert.ok(await page.locator("img.qr").evaluate((img) => img.complete && img.naturalWidth > 0), "QR code renders under the CSP");
+  const secret = (await txt(page, ".secret")).replace(/\s/g, "");
+  await page.fill("#code", "000000");
+  await page.click("button[type=submit]");
+  await page.waitForSelector(".error:text('didn')");
+  await page.fill("#code", totp(secret));
+  await page.click("button[type=submit]");
+
+  await page.waitForSelector("h1:text('Welcome, Carmen')");
+  assert.match(await txt(page, "#who"), /Carmen\s*owner/);
+  await page.waitForSelector("table tbody tr");
+  assert.match(await txt(page, "table"), /Signed in to the admin/, "the sign-in is in the activity log, in plain English");
+  assert.match(await txt(page, "table"), /Staff access granted or changed/, "and so is the owner-run grant");
+  await shot("dashboard");
+  assert.ok(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), "no overflow");
+
+  // Sign out, then a normal sign-in: password, then the two-step check.
+  await page.click("#who button");
+  await page.waitForSelector("h1:text('Sign in')");
+  assert.strictEqual(await page.evaluate(() => sessionStorage.getItem("cw_admin_session")), null, "session cleared");
+  await page.fill("#email", email);
+  await page.fill("#password", "wrong-" + pw);
+  await page.click("button[type=submit]");
+  await page.waitForSelector(".error:text('incorrect')");
+  await page.fill("#password", pw);
+  await page.click("button[type=submit]");
+  await page.waitForSelector("h1:text('Two-step check')");
+  await page.fill("#code", totp(secret));
+  await page.click("button[type=submit]");
+  await page.waitForSelector("h1:text('Welcome, Carmen')");
+
+  // A reload keeps the tab's session; a new tab (fresh sessionStorage) does not.
+  await page.reload();
+  await page.waitForSelector("h1:text('Welcome, Carmen')");
+  const other = await newPage(browser, { width: 390, height: 800 });
+  await other.goto(base + "/admin/");
+  await other.waitForSelector("h1:text('Sign in')");
+  assert.ok(!(await other.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), "admin fits a phone");
+  await other.context().close();
+  await page.context().close();
+  step("admin: one-time link → password → authenticator → dashboard + audit; sign out/in with two-step; strict CSP");
+}
+
 async function admin(pathAndQuery, init = {}) {
   const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
     ...init,
@@ -432,6 +534,8 @@ async function admin(pathAndQuery, init = {}) {
     { ...process.env, RESEND_API_KEY: "re_e2e_not_real", EMAIL_FROM: "Carmen <orders@example.com>" },
     { send: async (m) => { outbox.push(m); return { id: "re_e2e_" + outbox.length }; } });
   api["/api/download"] = (await import("../netlify/functions/download.mts")).default;
+  api["/api/admin/session"] = (await import("../netlify/functions/admin-session.mts")).default;
+  api["/api/admin/audit"] = (await import("../netlify/functions/admin-audit.mts")).default;
   const browser = await chromium.launch();
   const shots = process.env.SHOTS;
   try {
@@ -444,6 +548,7 @@ async function admin(pathAndQuery, init = {}) {
     await reviewsFlow(browser);
     await popupAndForms(browser);
     await mobile(browser);
+    await adminFlow(browser);
   } finally {
     await browser.close(); server.close();
   }

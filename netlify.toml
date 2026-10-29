@@ -8,12 +8,15 @@
 [functions]
   directory = "netlify/functions"
 
+# The admin's CSP names this environment's Supabase origin, so the build writes
+# it to dist/_headers (scripts/build.mts headersFile). Netlify applies both.
 [[headers]]
   for = "/*"
   [headers.values]
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    X-Frame-Options = "SAMEORIGIN"
+    # The shop is never framed; DENY also matches the admin's CSP (frame-ancestors 'none').
+    X-Frame-Options = "DENY"
 
 # Old product URLs (product.html?id=<slug>) keep working for bookmarks and search engines.
 [[redirects]]

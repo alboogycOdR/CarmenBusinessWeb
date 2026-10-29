@@ -278,6 +278,15 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 **Acceptance:** spec §4.3 admin login and role checks on server and database.
 
+**As built (PR 8):**
+- **D10 decided:** Carmen is the owner, and every account is in her name. Staff guide: [`admin.md`](admin.md).
+- **`/admin/`** is plain HTML and JS against Supabase Auth's REST API (no SDK, no third-party code). It covers sign-in, the one-time password link, a **mandatory TOTP enrolment** (QR code plus a typed key), the code challenge on later sign-ins, and a dashboard with recent activity (owner/admin). Sessions live in `sessionStorage` and end after 30 minutes idle.
+- **`netlify/lib/auth.mts` (`requireStaff`)** validates the token **with Supabase Auth itself**, rather than checking the JWT locally. That covers forged, tampered, expired *and signed-out* tokens, and works with both HS256 and asymmetric signing keys. It then requires `aal2` and reads the role fresh. Staff data queries use the staff token, so RLS applies again.
+- **`scripts/grant-admin.mts`** (was `grant-admin.ts`) creates the account with no usable password and prints a one-time link to choose one. It also offers `--reset` (removes the authenticator; prints a new link) and `--revoke` (profile deleted and the account banned, effective immediately). There is no "forgot password" email: the owner issues a new link, so no SMTP is needed for staff.
+- **Audit:** `record_admin_action()` records sign-ins and script actions; `audit_log.action` gains `ACTION`. The function is SECURITY DEFINER with EXECUTE for the service role only, because the log stays unwritable by every API role.
+- **Headers:** the admin's CSP must name this environment's Supabase origin, so the build writes `dist/_headers`. The site-wide `X-Frame-Options` is now `DENY` (the shop is never framed).
+- **Local auth config:** `site_url` is `http://localhost:8080`, and `/admin/` is an allowed redirect.
+
 ### PR 9: Admin catalogue
 **Scope**
 - Admin CRUD for products (draft/published/archived; archive, never hard-delete if ordered), categories, bundles and coupons.

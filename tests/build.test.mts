@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  BuildError, buildSite, catalogScript, injectHead, resolveSiteUrl, robotsTxt, sitemapXml, toProduct, validateCatalog,
+  adminConfigScript, BuildError, buildSite, catalogScript, headersFile, injectHead, resolveSiteUrl, robotsTxt, sitemapXml, toProduct, validateCatalog,
   type CatalogRow, type StorefrontProduct,
 } from "../scripts/build.mts";
 
@@ -109,6 +109,8 @@ test("sitemap and robots", () => {
   for (const p of P) assert.ok(xml.includes(`<loc>${SITE}/product/${p.id}/</loc>`), p.id);
   assert.ok(!/cart\.html|success\.html|404\.html/.test(xml), "transactional pages are not indexed");
   assert.match(robotsTxt(SITE), new RegExp(`Sitemap: ${SITE}/sitemap.xml`));
+  assert.match(robotsTxt(SITE), /Disallow: \/admin\//, "the admin is not crawled");
+  assert.ok(!xml.includes("/admin"), "nor listed in the sitemap");
 });
 
 test("buildSite writes a complete, SEO-ready site", () => {
@@ -175,3 +177,36 @@ test("buildSite refuses to delete anything outside the project or temp dir", () 
   assert.throws(() => buildSite(ROWS, { outDir: path.join(here, ".."), siteUrl: SITE }), /outside the project|source directory/);
   assert.throws(() => buildSite(ROWS, { outDir: path.join(here, "../assets"), siteUrl: SITE }), /source directory/);
 });
+
+test("admin (PR 8): public config only, and a strict CSP naming this environment's Supabase", () => {
+  const sb = { url: "https://abcd.supabase.co/", anonKey: "public-anon-key" };
+  const ctx = { window: {} as { ADMIN_CONFIG?: Record<string, string> } };
+  new Function("window", adminConfigScript(sb))(ctx.window);
+  assert.deepStrictEqual(ctx.window.ADMIN_CONFIG, { supabaseUrl: "https://abcd.supabase.co", anonKey: "public-anon-key" });
+  assert.ok(!adminConfigScript({ url: "https://x.supabase.co", anonKey: "</script><script>alert(1)" }).includes("</script"), "cannot break out of the script");
+  assert.strictEqual(adminConfigScript(null), "window.ADMIN_CONFIG = {};\n");
+
+  const h = headersFile(sb);
+  assert.match(h, /^\/admin\n/);
+  assert.match(h, /\n\/admin\/\*\n/);
+  assert.match(h, /Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https:\/\/abcd\.supabase\.co; form-action 'self'; frame-ancestors 'none'; base-uri 'none'/);
+  assert.match(h, /X-Robots-Tag: noindex, nofollow/);
+  assert.match(h, /Cache-Control: no-store/);
+  assert.ok(!/unsafe-inline|unsafe-eval|\*/.test(h.split("\n").filter((l) => l.includes("Content-Security-Policy")).join("")), "no unsafe-* or wildcards");
+  assert.throws(() => headersFile({ url: "not a url", anonKey: "k" }), BuildError);
+});
+
+test("buildSite publishes the admin with its config and headers", () => {
+  const out = tmpOut();
+  try {
+    buildSite(ROWS, { outDir: out, siteUrl: SITE, supabase: { url: "https://abcd.supabase.co", anonKey: "anon" } });
+    for (const f of ["admin/index.html", "admin/admin.js", "admin/admin.css", "admin/config.js", "_headers"]) assert.ok(fs.existsSync(path.join(out, f)), f);
+    const html = fs.readFileSync(path.join(out, "admin/index.html"), "utf8");
+    assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
+    assert.ok(!/<script>(?!<\/script>)|\son[a-z]+=|style=/.test(html), "no inline script, handlers or styles (CSP)");
+    assert.ok(!/innerHTML|insertAdjacentHTML|document\.write|eval\(/.test(fs.readFileSync(path.join(out, "admin/admin.js"), "utf8")), "admin.js builds the DOM with text only");
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
