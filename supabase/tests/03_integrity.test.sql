@@ -6,9 +6,9 @@ select no_plan();
 
 -- A fresh pending order to drive through the state machine.
 insert into public.orders (id, email, access_key_hash, currency, subtotal_minor, total_minor, provider, terms_accepted_at)
-values ('e0000000-0000-4000-8000-000000000001', 'flow@example.com', extensions.digest('k1', 'sha256'), 'USD', 4700, 4700, 'paystack', now());
+values ('e0000000-0000-4000-8000-000000000001', 'flow@example.com', extensions.digest('k1', 'sha256'), 'ZAR', 4700, 4700, 'payfast', now());
 insert into public.order_items (id, order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
-values ('f0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Starter', 'course', 4700, 1, 4700, 'USD');
+values ('f0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Starter', 'course', 4700, 1, 4700, 'ZAR');
 
 -- ---------- order state machine ------------------------------------------
 select throws_ok($$ update public.orders set status = 'paid' where id = 'e0000000-0000-4000-8000-000000000001' $$, '23514', null,
@@ -37,7 +37,7 @@ select throws_ok($$ update public.orders set total_minor = 1, subtotal_minor = 1
   'order amounts are immutable (tampering)');
 select throws_ok($$ update public.orders set email = 'thief@example.com' where id = 'e0000000-0000-4000-8000-000000000001' $$, '42501', null,
   'order email is immutable');
-select throws_ok($$ update public.orders set currency = 'ZAR' where id = 'e0000000-0000-4000-8000-000000000001' $$, '42501', null,
+select throws_ok($$ update public.orders set currency = 'USD' where id = 'e0000000-0000-4000-8000-000000000001' $$, '42501', null,
   'order currency is immutable');
 select throws_ok($$ update public.orders set provider_txn_id = 'other' where id = 'e0000000-0000-4000-8000-000000000001' $$, '42501', null,
   'provider transaction id cannot change once set');
@@ -48,39 +48,39 @@ select throws_ok($$ update public.order_items set unit_price_minor = 1 where id 
 select throws_ok($$ delete from public.order_items where id = 'f0000000-0000-4000-8000-000000000001' $$, '42501', null,
   'order items cannot be deleted');
 select throws_ok($$ insert into public.order_items (order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
-  values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000007', 'x', 'book', 1900, 1, 1900, 'ZAR') $$, '23514', null,
+  values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000007', 'x', 'book', 1900, 1, 1900, 'USD') $$, '23514', null,
   'order item currency must match the order');
 select throws_ok($$ insert into public.order_items (order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
-  values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000007', 'x', 'book', 1900, 2, 1900, 'USD') $$, '23514', null,
+  values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000007', 'x', 'book', 1900, 2, 1900, 'ZAR') $$, '23514', null,
   'line total must equal unit price x quantity');
 select throws_ok($$ insert into public.order_items (order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
-  values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'dup', 'course', 4700, 1, 4700, 'USD') $$, '23505', null,
+  values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'dup', 'course', 4700, 1, 4700, 'ZAR') $$, '23505', null,
   'one line per product per order');
 select throws_ok($$ delete from public.products where slug = 'starter-course' $$, '23503', null,
   'a product that has been ordered cannot be hard-deleted (archive it instead)');
 
 -- ---------- payment event idempotency ------------------------------------
 insert into public.payment_events (provider, provider_event_id, type, order_id, payload)
-values ('paystack', 'evt_replay_1', 'charge.success', 'e0000000-0000-4000-8000-000000000001', '{"n": 1}');
-select throws_ok($$ insert into public.payment_events (provider, provider_event_id, type, payload) values ('paystack', 'evt_replay_1', 'charge.success', '{"n": 2}') $$, '23505', null,
+values ('payfast', 'evt_replay_1', 'charge.success', 'e0000000-0000-4000-8000-000000000001', '{"n": 1}');
+select throws_ok($$ insert into public.payment_events (provider, provider_event_id, type, payload) values ('payfast', 'evt_replay_1', 'charge.success', '{"n": 2}') $$, '23505', null,
   'webhook replay: the same provider event cannot be stored twice');
 select lives_ok($$ insert into public.payment_events (provider, provider_event_id, type, payload) values ('stripe', 'evt_replay_1', 'charge.success', '{}') $$,
   'event ids are scoped per provider');
-select throws_ok($$ update public.payment_events set payload = '{"forged": true}' where provider_event_id = 'evt_replay_1' and provider = 'paystack' $$, '42501', null,
+select throws_ok($$ update public.payment_events set payload = '{"forged": true}' where provider_event_id = 'evt_replay_1' and provider = 'payfast' $$, '42501', null,
   'stored webhook payloads are immutable');
-select lives_ok($$ update public.payment_events set status = 'failed', error = 'lookup mismatch', attempts = 1 where provider_event_id = 'evt_replay_1' and provider = 'paystack' $$,
+select lives_ok($$ update public.payment_events set status = 'failed', error = 'lookup mismatch', attempts = 1 where provider_event_id = 'evt_replay_1' and provider = 'payfast' $$,
   'event processing status can be recorded for replay');
 select throws_ok($$ delete from public.payment_events $$, '42501', null, 'payment events cannot be deleted');
 select throws_ok($$ insert into public.orders (email, access_key_hash, currency, subtotal_minor, total_minor, provider, provider_txn_id, terms_accepted_at)
-  values ('dup@example.com', extensions.digest('k2', 'sha256'), 'USD', 1, 1, 'paystack', 'txn_flow', now()) $$, '23505', null,
+  values ('dup@example.com', extensions.digest('k2', 'sha256'), 'ZAR', 1, 1, 'payfast', 'txn_flow', now()) $$, '23505', null,
   'one order per provider transaction');
 
 -- ---------- fulfilment integrity -----------------------------------------
 -- Bundle order: assets of bundle components are valid; foreign assets are not.
 insert into public.orders (id, email, access_key_hash, currency, subtotal_minor, total_minor, provider, terms_accepted_at)
-values ('e0000000-0000-4000-8000-000000000002', 'bundle@example.com', extensions.digest('k3', 'sha256'), 'USD', 22900, 22900, 'paystack', now());
+values ('e0000000-0000-4000-8000-000000000002', 'bundle@example.com', extensions.digest('k3', 'sha256'), 'ZAR', 22900, 22900, 'payfast', now());
 insert into public.order_items (id, order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
-values ('f0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000010', 'Bundle', 'bundle', 22900, 1, 22900, 'USD');
+values ('f0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000010', 'Bundle', 'bundle', 22900, 1, 22900, 'ZAR');
 
 select lives_ok($$ insert into public.fulfilments (id, order_id, order_item_id, asset_id, kind)
   values ('90000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000007', 'external') $$,
