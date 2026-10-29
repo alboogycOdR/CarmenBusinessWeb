@@ -34,6 +34,16 @@ test("formatPrice / toCents", () => {
   assert.strictEqual(L.toCents(0.1 + 0.2), 30);
 });
 
+test("D17: rands are shown as R1 997.00 (no-break space, point decimals)", () => {
+  const nb = "\u00a0";
+  assert.strictEqual(L.formatPrice(1997, "ZAR"), `R1${nb}997.00`);
+  assert.strictEqual(L.formatPrice(5, "ZAR"), "R5.00");
+  assert.strictEqual(L.formatPrice(1234567.89, "ZAR"), `R1${nb}234${nb}567.89`);
+  assert.strictEqual(L.formatPrice(0.1 + 0.2, "ZAR"), "R0.30");
+  assert.strictEqual(L.formatPrice(-49.9, "ZAR"), "-R49.90");
+  assert.ok(P.every((p) => p.currency === "ZAR"), "the catalogue is in rands (ADR-0009)");
+});
+
 test("categories combine type label and tags, deduplicated", () => {
   const cats = L.allCategories(P);
   for (const c of ["Courses", "Books", "Guides", "Templates", "Bundles"]) assert.ok(cats.includes(c), c);

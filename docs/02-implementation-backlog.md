@@ -138,6 +138,13 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 **Acceptance:** J2 (payment initiation), spec §7 "Tampering" and "Failed or abandoned payment" (no paid order, no link, no success message).
 
+**As built (PR 3):**
+- Pricing, coupon checks (with a row lock), the R5.00 minimum and order creation all happen in one SQL function, `create_pending_order` (ADR-0003). The Netlify function validates input, calls it, then signs the Payfast form.
+- `order-status` was **brought forward from PR 4** in minimal form (status only) so the success page can be honest now. PR 4 adds item and delivery details.
+- **Fixed a latent PR 1 bug.** `orders.reference`'s default calls `private.new_order_reference()`, which the service role couldn't execute, so no server could have created an order. A regression test now inserts an order as `service_role`.
+- Payfast signatures are verified against **Payfast's own PHP reference code**: committed vectors, plus a 2,000-string cross-check against PHP's `urlencode` during development.
+- The RLS matrix tests compare against the actual row count, so they no longer depend on a freshly seeded database.
+
 ### PR 4: Payfast ITN, idempotent confirmation, order status
 **Scope**
 - A `payfast-itn` v2 function (form-encoded POST) that runs **all four Payfast checks**, failing closed:

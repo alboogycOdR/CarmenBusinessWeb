@@ -335,10 +335,21 @@ isOneToOne: false
                 }
           }
           Functions: {
-            [_ in never]: never
+            "create_pending_order":
+{ Args: { "p_access_key_hash": string,"p_coupon_code": string,"p_email": string,"p_expected_total": number,"p_items": Json,"p_livemode": boolean,"p_marketing_opt_in": boolean,"p_terms_accepted": boolean }; Returns: Json
+                           },
+"expire_stale_orders":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"get_order_status":
+{ Args: { "p_access_key_hash": string,"p_reference": string }; Returns: Json
+                           },
+"payfast_minimum_minor":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           }
           }
           Enums: {
-            "access_mode": "instant"|"manual","admin_role": "owner"|"admin"|"support","asset_kind": "file"|"external","email_status": "queued"|"sent"|"failed","event_status": "received"|"processed"|"ignored"|"failed","fulfilment_status": "queued"|"delivered"|"action_required"|"revoked"|"failed","order_status": "pending"|"paid"|"failed"|"expired"|"refunded"|"partially_refunded"|"disputed","payment_provider": "paystack"|"stripe","product_status": "draft"|"published"|"archived","product_type": "course"|"book"|"guide"|"template"|"bundle"
+            "access_mode": "instant"|"manual","admin_role": "owner"|"admin"|"support","asset_kind": "file"|"external","email_status": "queued"|"sent"|"failed","event_status": "received"|"processed"|"ignored"|"failed","fulfilment_status": "queued"|"delivered"|"action_required"|"revoked"|"failed","order_status": "pending"|"paid"|"failed"|"expired"|"refunded"|"partially_refunded"|"disputed","payment_provider": "paystack"|"stripe"|"payfast","product_status": "draft"|"published"|"archived","product_type": "course"|"book"|"guide"|"template"|"bundle"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -454,7 +465,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "access_mode": ["instant", "manual"],"admin_role": ["owner", "admin", "support"],"asset_kind": ["file", "external"],"email_status": ["queued", "sent", "failed"],"event_status": ["received", "processed", "ignored", "failed"],"fulfilment_status": ["queued", "delivered", "action_required", "revoked", "failed"],"order_status": ["pending", "paid", "failed", "expired", "refunded", "partially_refunded", "disputed"],"payment_provider": ["paystack", "stripe"],"product_status": ["draft", "published", "archived"],"product_type": ["course", "book", "guide", "template", "bundle"]
+            "access_mode": ["instant", "manual"],"admin_role": ["owner", "admin", "support"],"asset_kind": ["file", "external"],"email_status": ["queued", "sent", "failed"],"event_status": ["received", "processed", "ignored", "failed"],"fulfilment_status": ["queued", "delivered", "action_required", "revoked", "failed"],"order_status": ["pending", "paid", "failed", "expired", "refunded", "partially_refunded", "disputed"],"payment_provider": ["paystack", "stripe", "payfast"],"product_status": ["draft", "published", "archived"],"product_type": ["course", "book", "guide", "template", "bundle"]
           }
         }
 } as const

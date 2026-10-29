@@ -21,10 +21,11 @@ test("toProduct maps a database row to the storefront shape", () => {
   const p = toProduct(row("bundle"));
   assert.strictEqual(p.id, "bundle");
   assert.strictEqual(p.type, "bundle");
-  assert.strictEqual(p.priceMinor, 22900);
-  assert.strictEqual(p.price, 229);
-  assert.strictEqual(p.compareAt, 334);
-  assert.strictEqual(p.badge, "Save 31%");
+  assert.strictEqual(p.priceMinor, 229700);
+  assert.strictEqual(p.price, 2297);
+  assert.strictEqual(p.compareAt, 2574);
+  assert.strictEqual(p.currency, "ZAR");
+  assert.strictEqual(p.badge, "Save 11%");
   assert.deepStrictEqual(p.color, ["#1f1f1f", "#e50069"]);
   assert.deepStrictEqual(p.bundleContents, ["signature-course", "book-one", "book-two", "workbook"]);
   assert.deepStrictEqual(p.tags, ["Marketing"]);
@@ -70,7 +71,7 @@ test("validateCatalog enforces catalogue-wide rules", () => {
   assert.throws(() => validateCatalog([], []), /empty catalogue/);
   assert.doesNotThrow(() => validateCatalog([], [], { allowEmpty: true }));
   assert.throws(() => validateCatalog([...P, P[0]!], []), /duplicate product slug/);
-  assert.throws(() => validateCatalog([P[0]!, { ...P[1]!, currency: "ZAR" }], []), /mixes currencies/);
+  assert.throws(() => validateCatalog([P[0]!, { ...P[1]!, currency: "USD" }], []), /mixes currencies/);
   assert.throws(() => validateCatalog(P, [{ name: "x", rating: 5, date: "2026-01-01", productId: "upcoming-course", text: "x" }]), /unknown or unpublished products: upcoming-course/);
 });
 
@@ -141,8 +142,8 @@ test("buildSite writes a complete, SEO-ready site", () => {
     assert.match(page, /data-product="signature-course"/);
     const ld = JSON.parse(page.match(/<script type="application\/ld\+json">(.+?)<\/script>/)![1]!);
     assert.strictEqual(ld["@type"], "Product");
-    assert.strictEqual(ld.offers.price, "197.00");
-    assert.strictEqual(ld.offers.priceCurrency, "USD");
+    assert.strictEqual(ld.offers.price, "1997.00");
+    assert.strictEqual(ld.offers.priceCurrency, "ZAR");
     assert.strictEqual(ld.aggregateRating.reviewCount, 3, "site-config reviews for this product");
     assert.ok(!page.includes("Build template"), "maintainer comment stripped");
     assert.ok(!page.includes('id="qty"'), "no quantity control for a single-licence product");

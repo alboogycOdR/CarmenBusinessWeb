@@ -1,0 +1,56 @@
+{
+    "source": "Payfast PHP generateSignature (docs, Step 2), PHP 8.3.6",
+    "cases": [
+        {
+            "name": "basic order",
+            "passphrase": "test-passphrase-1",
+            "fields": {
+                "merchant_id": "10000001",
+                "merchant_key": "fakekey00000a",
+                "return_url": "https://shop.example.com/success.html?ref=CBW-7K2M9QX4TB",
+                "cancel_url": "https://shop.example.com/cart.html?cancelled=CBW-7K2M9QX4TB",
+                "notify_url": "https://shop.example.com/api/payfast/itn",
+                "email_address": "buyer@example.com",
+                "m_payment_id": "CBW-7K2M9QX4TB",
+                "amount": "1997.00",
+                "item_name": "Carmen order CBW-7K2M9QX4TB",
+                "item_description": "The Signature Course: Your Complete Programme"
+            },
+            "signature": "f0a2d8ed87fa4ee324df0c1d51921a92"
+        },
+        {
+            "name": "tricky characters",
+            "passphrase": "pass phrase ~*'()!+&=",
+            "fields": {
+                "merchant_id": "10000001",
+                "merchant_key": "fakekey00000a",
+                "return_url": "https://shop.example.com/success.html?ref=CBW-0000000000&x=1",
+                "cancel_url": "https://shop.example.com/cart.html",
+                "notify_url": "https://shop.example.com/api/payfast/itn",
+                "email_address": "o'brien+tag@example.co.za",
+                "m_payment_id": "CBW-0000000000",
+                "amount": "5.00",
+                "item_name": "Course & Book ~ (Bundle) *50%* !",
+                "item_description": "Café résumé — naïve “quotes” ✓"
+            },
+            "signature": "37c38f06854e052e85439ea378cbec9d"
+        },
+        {
+            "name": "blank fields are skipped, values trimmed",
+            "passphrase": null,
+            "fields": {
+                "merchant_id": "10000001",
+                "merchant_key": "fakekey00000a",
+                "return_url": "",
+                "cancel_url": "",
+                "notify_url": "https://shop.example.com/api/payfast/itn",
+                "email_address": "  spaced@example.com  ",
+                "m_payment_id": "CBW-1111111111",
+                "amount": "12.50",
+                "item_name": "  Planner  ",
+                "item_description": ""
+            },
+            "signature": "833fa8a743f02c7ff60ae749dfa895a6"
+        }
+    ]
+}

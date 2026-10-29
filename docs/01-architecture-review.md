@@ -272,7 +272,7 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 | ~~D14~~ | ~~Totals below Payfast's R5.00 minimum~~ | **Decided 29 Oct 2026: reject at checkout** with a clear message; the coupon editor refuses 100% coupons; free give-aways go out as free resources, not R0 orders. | ✓ (PR 3, PR 9) |
 | D15 | Refund operations: may admins trigger card refunds via the Payfast API from our admin, or should all refunds happen in the Payfast dashboard and then be recorded in ours? | Both: API refunds where Payfast reports `REFUNDABLE` by card; dashboard plus "record refund" for bank-payout cases. | PR 7, PR 10 |
 | **D16** | **Payfast accounts:** a live merchant account (registered business, passphrase set) owned by the client, and a **sandbox account** for staging. | Client creates both. The developer gets sandbox credentials only. | **PR 4** (sandbox end-to-end), PR 13 |
-| D17 | Price display format for rands. | `R1 997.00` (en-ZA grouping, decimal point), consistent in cart, emails and receipts. | PR 3 |
+| ~~D17~~ | ~~Rand display format~~ | **Decided 29 Oct 2026: `R1 997.00`** (no-break space between thousands, point decimals) in the cart, emails and receipts. | ✓ (PR 3) |
 
 ---
 

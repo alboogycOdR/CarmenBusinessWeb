@@ -45,11 +45,12 @@ window.SITE = {
   },
 
   /* Cart + checkout.
-   * endpoint: the Payfast checkout function (PR 3). Blank = no server yet:
-   * the cart lets the customer email their order instead.
-   * discounts: display-only previews; PR 3 moves coupon validation server-side. */
+   * endpoint: the Payfast checkout function. Blank (e.g. a static preview
+   * without functions) = the cart lets the customer email their order instead.
+   * discounts: DISPLAY-ONLY previews of codes the cart can price in advance.
+   * Real coupons live in the database and are validated at checkout. */
   checkout: {
-    endpoint: "",
+    endpoint: "/api/checkout",
     discounts: { SAVE10: { percent: 10 } },
   },
 

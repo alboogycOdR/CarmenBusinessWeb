@@ -16,9 +16,25 @@ if (!fs.existsSync(path.join(root, "assets/js/catalog.js"))) {
   process.exit(1);
 }
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".xml": "application/xml", ".txt": "text/plain" };
-/* Mirrors netlify.toml: the product.html?id= redirect, then files, then the 404 page with status 404. */
+/* The real Netlify function handlers, run against the local database (loaded in main). */
+const api = {};
+async function serveApi(handler, req, res) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const request = new Request(base + req.url, {
+    method: req.method,
+    headers: Object.entries(req.headers).filter(([, v]) => typeof v === "string"),
+    body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks),
+  });
+  const response = await handler(request);
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  res.end(Buffer.from(await response.arrayBuffer()));
+}
+
+/* Mirrors Netlify: /api/* functions, the product.html?id= redirect, files, then the 404 page. */
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
+  if (api[url.pathname]) return void serveApi(api[url.pathname], req, res).catch((e) => { res.writeHead(500); res.end(String(e)); });
   if (url.pathname === "/product.html" && url.searchParams.get("id")) {
     res.writeHead(301, { Location: `/product/${encodeURIComponent(url.searchParams.get("id"))}/` });
     return res.end();
@@ -50,6 +66,7 @@ async function newPage(browser, vp, patch) {
 }
 const txt = (page, sel) => page.locator(sel).first().innerText();
 const step = (n) => process.stdout.write(`  ok ${n}\n`);
+const rand = (text) => Number(text.replace(/[^0-9.]/g, "")); // "R1 997.00" -> 1997
 
 async function pagesRender(browser, vp, shots) {
   const page = await newPage(browser, vp);
@@ -80,15 +97,15 @@ async function shopFlow(browser) {
   await page.fill("#f-q", "workbook"); await page.press("#f-q", "Enter");
   assert.strictEqual(await page.locator(".card").count(), 3, "search matches workbook in title or summary");
   await page.click("[data-reset]");
-  await page.fill("#f-min", "100"); await page.fill("#f-max", "250"); await page.dispatchEvent("#f-max", "change");
+  await page.fill("#f-min", "1000"); await page.fill("#f-max", "2500"); await page.dispatchEvent("#f-max", "change");
   const prices = await page.locator(".card .price strong").allInnerTexts();
-  assert.ok(prices.length && prices.every((p) => { const n = Number(p.replace(/[$,]/g, "")); return n >= 100 && n <= 250; }), "price filter " + prices);
+  assert.ok(prices.length === 2 && prices.every((p) => { const n = rand(p); return n >= 1000 && n <= 2500; }), "price filter " + prices);
   await page.click("[data-reset]");
   await page.check('input[name="cat"][value="Books"]');
   assert.strictEqual(await page.locator(".card").count(), 2, "2 books (workbook and planner are a template and a guide)");
   assert.match(page.url(), /cat=Books/);
   await page.selectOption("#f-sort", "price-desc");
-  const books = (await page.locator(".card .price strong").allInnerTexts()).map((p) => Number(p.replace(/[$,]/g, "")));
+  const books = (await page.locator(".card .price strong").allInnerTexts()).map(rand);
   assert.deepStrictEqual(books, [...books].sort((a, b) => b - a), "sorted desc");
   await page.fill("#f-q", "zzz"); await page.press("#f-q", "Enter");
   assert.match(await txt(page, "#results"), /No products match/);
@@ -103,37 +120,30 @@ async function shopFlow(browser) {
 async function cartFlow(browser) {
   const page = await newPage(browser, { width: 1280, height: 900 });
   await page.goto(base + "/");
-  await page.locator('[data-add="starter-course"]').click();            // $47
+  await page.locator('[data-add="starter-course"]').click();            // R497
   assert.ok(await page.locator("#drawer").isVisible(), "drawer opens");
   assert.strictEqual(await txt(page, "[data-cart-count]"), "1");
   await page.keyboard.press("Escape");
   assert.ok(!(await page.locator("#drawer").isVisible()), "Esc closes drawer");
-  await page.locator('[data-add="book-two"]').click();                    // $19
+  await page.locator('[data-add="book-two"]').click();                    // R199
   await page.keyboard.press("Escape");
   await page.locator('[data-add="book-two"]').click();                    // again: still one licence (ADR-0008)
   assert.strictEqual(await txt(page, "[data-cart-count]"), "2");
   assert.strictEqual(await page.locator("#drawer [data-inc], #drawer [data-qty-input]").count(), 0, "no quantity controls for single licences");
   await page.click("#drawer a[href='/cart.html']");
   await page.waitForSelector(".cart-grid");
-  assert.match(await txt(page, ".totals .grand"), /\$66\.00/, "47 + 19");
+  assert.match(await txt(page, ".totals .grand"), /R696\.00/, "497 + 199");
   step("add to cart, drawer, single-licence quantities");
 
   await page.reload();
   assert.strictEqual(await txt(page, "[data-cart-count]"), "2", "cart survives reload");
   await page.fill("#cp", "nope"); await page.click(".coupon button");
-  assert.match(await txt(page, ".coupon .form-msg"), /not valid/);
+  assert.match(await txt(page, ".coupon .form-msg"), /checked when you pay/, "unknown codes are left to the server");
   await page.fill("#cp", "save10"); await page.click(".coupon button");
   assert.match(await txt(page, ".coupon .form-msg"), /SAVE10 applied/);
-  assert.match(await txt(page, ".totals .disc"), /\$6\.60/);
-  assert.match(await txt(page, ".totals .grand"), /\$59\.40/);
+  assert.match(await txt(page, ".totals .disc"), /R69\.60/);
+  assert.match(await txt(page, ".totals .grand"), /R626\.40/);
   step("discount code");
-
-  await page.click("#checkout");
-  const msg = await txt(page, "#checkout-msg");
-  assert.match(msg, /Email my order/);
-  assert.match(await page.locator("#checkout-msg a[href^='mailto:']").getAttribute("href"), /1%20x%20Starter%20Foundations/);
-  assert.strictEqual(await page.locator("#checkout-msg .pay").count(), 0, "no per-product payment links (G7)");
-  step("no-server checkout fallback");
 
   await page.locator("[data-line='book-two'] [data-remove]").click();
   assert.strictEqual(await page.locator(".line").count(), 1);
@@ -141,30 +151,78 @@ async function cartFlow(browser) {
   assert.match(await txt(page, "#view"), /cart is currently empty/);
   await page.close();
 
-  /* server checkout path */
-  const p2 = await newPage(browser, { width: 1280, height: 900 }, "window.SITE.checkout.endpoint='/api/checkout';");
-  let posted = null;
-  await p2.route("**/api/checkout", (r) => { posted = JSON.parse(r.request().postData()); r.fulfill({ contentType: "application/json", body: JSON.stringify({ url: base + "/success.html" }) }); });
-  await p2.goto(base + "/");
-  await p2.locator('[data-add="workbook"]').click();
-  await p2.goto(base + "/cart.html");
-  await p2.fill("#cp", "SAVE10"); await p2.click(".coupon button");
-  await p2.click("#checkout");
-  await p2.waitForURL("**/success.html");
-  assert.deepStrictEqual(posted, { items: [{ id: "workbook", qty: 1 }], code: "SAVE10" });
-  assert.strictEqual(await txt(p2, "[data-cart-count]"), "0", "cart cleared after success");
-  await p2.goto(base + "/cart.html");
-  assert.match(await txt(p2, "#view"), /currently empty/);
-  step("server checkout + success clears cart");
+  /* Static preview without functions: the customer can still email the order. */
+  const p0 = await newPage(browser, { width: 1280, height: 900 }, "window.SITE.checkout.endpoint='';");
+  await p0.goto(base + "/"); await p0.locator('[data-add="starter-course"]').click(); await p0.goto(base + "/cart.html");
+  await p0.click("#pay");
+  assert.match(await txt(p0, "#checkout-msg"), /Email my order/);
+  assert.match(await p0.locator("#checkout-msg a[href^='mailto:']").getAttribute("href"), /1%20x%20Starter%20Foundations/);
+  step("no-functions fallback: email the order");
+  await p0.context().close();
 
-  const p3 = await newPage(browser, { width: 1280, height: 900 }, "window.SITE.checkout.endpoint='/api/checkout';");
+  /* Real checkout: browser -> /api/checkout (real function + database) -> signed form -> Payfast (stubbed host). */
+  const { signature } = await import("../netlify/lib/payfast.mts");
+  const p2 = await newPage(browser, { width: 1280, height: 900 });
+  const posts = [];
+  await p2.route("https://sandbox.payfast.co.za/**", (r) => {
+    posts.push(r.request().postData());
+    r.fulfill({ status: 200, contentType: "text/html", body: "<h1>Payfast sandbox (stub)</h1>" });
+  });
+  const payThrough = async () => {
+    await Promise.all([p2.waitForURL("https://sandbox.payfast.co.za/**"), p2.click("#pay")]);
+    const pairs = [...new URLSearchParams(posts.at(-1))];
+    const fields = Object.fromEntries(pairs);
+    assert.strictEqual(fields.signature, signature(pairs.filter(([k]) => k !== "signature"), process.env.PAYFAST_PASSPHRASE), "browser posted the fields in signed order, unaltered");
+    return fields;
+  };
+  await p2.goto(base + "/"); await p2.locator('[data-add="workbook"]').click(); await p2.goto(base + "/cart.html");
+  await p2.click("#pay");
+  assert.match(await txt(p2, "#checkout-msg"), /valid email/);
+  await p2.fill("#co-email", "e2e-" + Date.now() + "@example.com");
+  await p2.click("#pay");
+  assert.match(await txt(p2, "#checkout-msg"), /Terms/);
+  await p2.check("#co-terms");
+  const paid = await payThrough();
+  assert.strictEqual(paid.amount, "129.00", "server-priced amount (R129.00)");
+  assert.match(paid.m_payment_id, /^CBW-/);
+  step("checkout: validation, server pricing, signed Payfast post");
+
+  // Back from Payfast: the page must NOT claim success until the server says paid (spec 4.1).
+  await p2.goto(`${base}/success.html?ref=${paid.m_payment_id}`);
+  await p2.waitForSelector('#order-status[data-state="pending"]');
+  assert.strictEqual(await txt(p2, "[data-cart-count]"), "1", "cart kept while unconfirmed");
+  await admin(`orders?reference=eq.${paid.m_payment_id}`, { method: "PATCH", body: JSON.stringify({ status: "paid", paid_at: new Date().toISOString(), provider_txn_id: "e2e-" + paid.m_payment_id }) });
+  await p2.waitForSelector('#order-status[data-state="paid"]', { timeout: 10000 });
+  assert.match(await txt(p2, "h1"), /Payment received/);
+  assert.strictEqual(await txt(p2, "[data-cart-count]"), "0", "cart cleared only after server confirmation");
+  step("success page: neutral until the server confirms, then paid");
+
+  // A code only the server knows (FIXED20, R20 off) is applied at checkout.
+  await p2.goto(base + "/"); await p2.locator('[data-add="workbook"]').click(); await p2.goto(base + "/cart.html");
+  await p2.fill("#cp", "fixed20"); await p2.click(".coupon button");
+  await p2.fill("#co-email", "e2e-fixed-" + Date.now() + "@example.com"); await p2.check("#co-terms");
+  const fixed = await payThrough();
+  assert.strictEqual(fixed.amount, "109.00", "R129.00 - R20.00 coupon, priced by the server");
+  await p2.goto(`${base}/cart.html?cancelled=${fixed.m_payment_id}`);
+  assert.match(await txt(p2, ".cart-page .notice"), /cancelled/);
+  assert.strictEqual(await p2.locator(".line").count(), 1, "cancelling keeps the cart");
+  await admin(`orders?reference=eq.${fixed.m_payment_id}`, { method: "PATCH", body: JSON.stringify({ status: "expired" }) });
+  await p2.goto(`${base}/success.html?ref=${fixed.m_payment_id}`);
+  await p2.waitForSelector('#order-status[data-state="unpaid"]');
+  step("server-only coupon, cancel keeps cart, expired order shown as not completed");
+  await p2.context().close();
+
+  const p3 = await newPage(browser, { width: 1280, height: 900 });
+  await p3.goto(`${base}/success.html?ref=CBW-0000000000`);
+  await p3.waitForSelector('#order-status[data-state="unknown"]');
   await p3.route("**/api/checkout", (r) => r.fulfill({ status: 500, contentType: "application/json", body: '{"error":"x"}' }));
   await p3.goto(base + "/"); await p3.locator('[data-add="workbook"]').click(); await p3.goto(base + "/cart.html");
-  await p3.click("#checkout");
+  await p3.fill("#co-email", "x@example.com"); await p3.check("#co-terms");
+  await p3.click("#pay");
   await p3.waitForSelector("#checkout-msg .err");
-  assert.ok(await p3.locator("#checkout").isEnabled(), "button re-enabled after failure");
-  step("checkout error handling");
-  await p2.context().close(); await p3.context().close();
+  assert.ok(await p3.locator("#pay").isEnabled(), "button re-enabled after failure");
+  step("unknown order on another device; checkout error handling");
+  await p3.context().close();
 }
 
 async function productFlow(browser) {
@@ -180,7 +238,7 @@ async function productFlow(browser) {
   await page.click("#add-main");
   await page.keyboard.press("Escape");
   await page.click("#add-main");
-  assert.match(await txt(page, "#drawer .totals"), /\$197\.00/, "adding twice keeps one licence");
+  assert.match(await txt(page, "#drawer .totals"), /R1\s997\.00/, "adding twice keeps one licence");
   await page.keyboard.press("Escape");
   await page.focus("#t-desc"); await page.keyboard.press("ArrowRight");
   assert.ok(await page.locator("#p-info").isVisible(), "arrow key switches tab");
@@ -289,9 +347,27 @@ async function mobile(browser) {
   await page.close();
 }
 
+async function admin(pathAndQuery, init = {}) {
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
+    ...init,
+    headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json", ...(init.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`${pathAndQuery}: ${res.status} ${await res.text()}`);
+}
+
 (async () => {
   await new Promise((r) => server.listen(0, r));
   base = `http://localhost:${server.address().port}`;
+  // Function environment: the local stack plus fake Payfast sandbox credentials.
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const { execFileSync } = require("node:child_process");
+    for (const line of execFileSync("node", [path.join(__dirname, "../scripts/supabase-env.mts")], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim().split("\n")) {
+      const at = line.indexOf("="); process.env[line.slice(0, at)] = line.slice(at + 1);
+    }
+  }
+  Object.assign(process.env, { SITE_URL: base, PAYFAST_MODE: "sandbox", PAYFAST_MERCHANT_ID: "10000001", PAYFAST_MERCHANT_KEY: "fakekey00000a", PAYFAST_PASSPHRASE: "e2e-passphrase-" + process.pid });
+  api["/api/checkout"] = (await import("../netlify/functions/checkout.mts")).default;
+  api["/api/order-status"] = (await import("../netlify/functions/order-status.mts")).default;
   const browser = await chromium.launch();
   const shots = process.env.SHOTS;
   try {
