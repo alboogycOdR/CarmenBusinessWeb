@@ -16,7 +16,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // Scripts run directly with Node's built-in type stripping (Node >= 22.18):
+    // erasable syntax only, and imports name the .ts file.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true
   },
-  "include": ["netlify/functions/**/*", "scripts/**/*", "types/**/*"]
+  "include": ["netlify/functions/**/*", "scripts/**/*", "types/**/*", "tests/**/*.mts"]
 }

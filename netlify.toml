@@ -1,9 +1,12 @@
 [build]
-  publish = "."
+  # Generates dist/ from the database catalogue (scripts/build.mts, ADR-0006).
+  # Needs SUPABASE_URL and SUPABASE_ANON_KEY in the Netlify environment; Netlify
+  # provides URL (used for canonical links) automatically.
+  command = "npm run build"
+  publish = "dist"
 
 [functions]
   directory = "netlify/functions"
-  included_files = ["assets/js/site-config.js"]
 
 [[headers]]
   for = "/*"
@@ -11,6 +14,13 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Frame-Options = "SAMEORIGIN"
+
+# Old product URLs (product.html?id=<slug>) keep working for bookmarks and search engines.
+[[redirects]]
+  from = "/product.html"
+  to = "/product/:id/"
+  status = 301
+  query = { id = ":id" }
 
 [[redirects]]
   from = "/*"

@@ -1,7 +1,8 @@
 "use strict";
-/* Headless end-to-end test. Serves the site locally, drives real user flows in
- * Chromium and fails on any console/page error or horizontal overflow.
- *   npm run test:e2e            (needs playwright)
+/* Headless end-to-end test. Serves the BUILT site (dist/, from `npm run build`)
+ * the way Netlify does (directory index, legacy redirect, 404 page), drives real
+ * user flows in Chromium and fails on any console/page error or horizontal overflow.
+ *   npm run build && npm run test:e2e
  *   SHOTS=/dir npm run test:e2e (also saves full-page screenshots)  */
 const http = require("node:http");
 const fs = require("node:fs");
@@ -9,12 +10,27 @@ const path = require("node:path");
 const assert = require("node:assert");
 const { chromium } = require("playwright");
 
-const root = path.join(__dirname, "..");
-const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
+const root = path.join(__dirname, "..", "dist");
+if (!fs.existsSync(path.join(root, "assets/js/catalog.js"))) {
+  console.error("dist/ not built: run `npm run build` first (needs the local Supabase stack).");
+  process.exit(1);
+}
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".xml": "application/xml", ".txt": "text/plain" };
+/* Mirrors netlify.toml: the product.html?id= redirect, then files, then the 404 page with status 404. */
 const server = http.createServer((req, res) => {
-  const p = decodeURIComponent(req.url.split("?")[0]);
-  const file = path.join(root, p === "/" ? "index.html" : p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("nf"); }
+  const url = new URL(req.url, "http://x");
+  if (url.pathname === "/product.html" && url.searchParams.get("id")) {
+    res.writeHead(301, { Location: `/product/${encodeURIComponent(url.searchParams.get("id"))}/` });
+    return res.end();
+  }
+  let p;
+  try { p = decodeURIComponent(url.pathname); } catch { p = "/__bad__"; }
+  let file = path.join(root, p);
+  if (file.startsWith(root) && fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, "index.html");
+  if (!file.startsWith(root) || !fs.existsSync(file)) {
+    res.writeHead(404, { "Content-Type": "text/html" });
+    return res.end(fs.readFileSync(path.join(root, "404.html")));
+  }
   res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream" });
   res.end(fs.readFileSync(file));
 });
@@ -37,7 +53,7 @@ const step = (n) => process.stdout.write(`  ok ${n}\n`);
 
 async function pagesRender(browser, vp, shots) {
   const page = await newPage(browser, vp);
-  const urls = [["/", ".card"], ["/product.html?id=signature-course", ".product h1"], ["/cart.html", "h1"], ["/reviews.html", ".review"], ["/free.html", ".free"], ["/about.html", "h1"], ["/contact.html", "form"], ["/success.html", "h1"], ["/terms.html", "h1"], ["/privacy.html", "h1"], ["/404.html", "h1"]];
+  const urls = [["/", ".card"], ["/product/signature-course/", ".product h1"], ["/cart.html", "h1"], ["/reviews.html", ".review"], ["/free.html", ".free"], ["/about.html", "h1"], ["/contact.html", "form"], ["/success.html", "h1"], ["/terms.html", "h1"], ["/privacy.html", "h1"], ["/404.html", "h1"]];
   for (const [u, sel] of urls) {
     await page.goto(base + u);
     await page.waitForSelector(sel, { timeout: 4000 });
@@ -69,7 +85,7 @@ async function shopFlow(browser) {
   assert.ok(prices.length && prices.every((p) => { const n = Number(p.replace(/[$,]/g, "")); return n >= 100 && n <= 250; }), "price filter " + prices);
   await page.click("[data-reset]");
   await page.check('input[name="cat"][value="Books"]');
-  assert.strictEqual(await page.locator(".card").count(), 4, "4 books");
+  assert.strictEqual(await page.locator(".card").count(), 2, "2 books (workbook and planner are a template and a guide)");
   assert.match(page.url(), /cat=Books/);
   await page.selectOption("#f-sort", "price-desc");
   const books = (await page.locator(".card .price strong").allInnerTexts()).map((p) => Number(p.replace(/[$,]/g, "")));
@@ -93,33 +109,35 @@ async function cartFlow(browser) {
   await page.keyboard.press("Escape");
   assert.ok(!(await page.locator("#drawer").isVisible()), "Esc closes drawer");
   await page.locator('[data-add="book-two"]').click();                    // $19
-  await page.click("#drawer [data-inc]");                                  // first line qty -> 2
-  assert.strictEqual(await txt(page, "[data-cart-count]"), "3");
-  await page.click("#drawer a[href='cart.html']");
+  await page.keyboard.press("Escape");
+  await page.locator('[data-add="book-two"]').click();                    // again: still one licence (ADR-0008)
+  assert.strictEqual(await txt(page, "[data-cart-count]"), "2");
+  assert.strictEqual(await page.locator("#drawer [data-inc], #drawer [data-qty-input]").count(), 0, "no quantity controls for single licences");
+  await page.click("#drawer a[href='/cart.html']");
   await page.waitForSelector(".cart-grid");
-  assert.match(await txt(page, ".totals .grand"), /\$113\.00/, "2x47 + 19");
-  step("add to cart, drawer, quantities");
+  assert.match(await txt(page, ".totals .grand"), /\$66\.00/, "47 + 19");
+  step("add to cart, drawer, single-licence quantities");
 
   await page.reload();
-  assert.strictEqual(await txt(page, "[data-cart-count]"), "3", "cart survives reload");
+  assert.strictEqual(await txt(page, "[data-cart-count]"), "2", "cart survives reload");
   await page.fill("#cp", "nope"); await page.click(".coupon button");
   assert.match(await txt(page, ".coupon .form-msg"), /not valid/);
   await page.fill("#cp", "save10"); await page.click(".coupon button");
   assert.match(await txt(page, ".coupon .form-msg"), /SAVE10 applied/);
-  assert.match(await txt(page, ".totals .disc"), /\$11\.30/);
-  assert.match(await txt(page, ".totals .grand"), /\$101\.70/);
+  assert.match(await txt(page, ".totals .disc"), /\$6\.60/);
+  assert.match(await txt(page, ".totals .grand"), /\$59\.40/);
   step("discount code");
 
   await page.click("#checkout");
   const msg = await txt(page, "#checkout-msg");
   assert.match(msg, /Email my order/);
-  assert.match(await page.locator("#checkout-msg a[href^='mailto:']").getAttribute("href"), /2%20x%20Starter%20Foundations/);
+  assert.match(await page.locator("#checkout-msg a[href^='mailto:']").getAttribute("href"), /1%20x%20Starter%20Foundations/);
+  assert.strictEqual(await page.locator("#checkout-msg .pay").count(), 0, "no per-product payment links (G7)");
   step("no-server checkout fallback");
 
   await page.locator("[data-line='book-two'] [data-remove]").click();
   assert.strictEqual(await page.locator(".line").count(), 1);
-  await page.locator("[data-line='starter-course'] [data-dec]").click();
-  await page.locator("[data-line='starter-course'] [data-dec]").click();
+  await page.locator("[data-line='starter-course'] [data-remove]").click();
   assert.match(await txt(page, "#view"), /cart is currently empty/);
   await page.close();
 
@@ -150,23 +168,49 @@ async function cartFlow(browser) {
 }
 
 async function productFlow(browser) {
+  // Crawlers and no-JS clients get real content: the page is pre-rendered.
+  const raw = await (await fetch(base + "/product/signature-course/")).text();
+  assert.match(raw, /<h1>The Signature Course: Your Complete Programme<\/h1>/, "pre-rendered h1");
+  assert.match(raw, /<link rel="canonical" href="[^"]+\/product\/signature-course\/">/);
+
   const page = await newPage(browser, { width: 1280, height: 900 });
-  await page.goto(base + "/product.html?id=signature-course");
-  await page.fill("#qty", "3"); await page.click("#add-main");
-  assert.match(await txt(page, "#drawer .totals"), /\$591\.00/, "3 x 197");
+  await page.goto(base + "/product/signature-course/");
+  assert.strictEqual(await page.locator("#qty").count(), 0, "no quantity field for a single licence");
+  assert.strictEqual(await page.locator(".buy a").count(), 0, "no external Buy now link (G7)");
+  await page.click("#add-main");
+  await page.keyboard.press("Escape");
+  await page.click("#add-main");
+  assert.match(await txt(page, "#drawer .totals"), /\$197\.00/, "adding twice keeps one licence");
   await page.keyboard.press("Escape");
   await page.focus("#t-desc"); await page.keyboard.press("ArrowRight");
   assert.ok(await page.locator("#p-info").isVisible(), "arrow key switches tab");
   assert.match(await txt(page, "#p-info"), /Lifetime/);
   await page.click("#t-rev");
   assert.ok(await page.locator("#p-rev .review").count() >= 3, "product reviews");
+  assert.strictEqual(await page.locator("#p-rev .verified").count(), 0, "placeholder reviews are not badged as verified (G8)");
+  assert.strictEqual(await page.locator('script[type="application/ld+json"]').count(), 1, "exactly one JSON-LD block");
   assert.match(await page.locator('script[type="application/ld+json"]').innerText(), /AggregateRating/);
   assert.match(await page.title(), /Signature Course/);
-  await page.goto(base + "/product.html?id=ghost");
-  assert.match(await txt(page, "#view"), /not found/i);
-  await page.goto(base + "/product.html?id=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E");
+  await page.click(".cats a >> nth=0");
+  await page.waitForSelector(".card");
+  assert.ok(await page.locator('input[name="cat"][value="Courses"]').isChecked(), "category link opens the filtered shop");
+
+  const legacy = await page.goto(base + "/product.html?id=book-one");
+  assert.match(page.url(), /\/product\/book-one\/$/, "old product URLs redirect");
+  assert.strictEqual(legacy.status(), 200);
+  assert.match(await txt(page, ".product h1"), /The First Book/);
+
+  const missing = await page.goto(base + "/product/ghost/");
+  assert.strictEqual(missing.status(), 404);
+  assert.match(await txt(page, "h1"), /Page not found/);
+  assert.strictEqual(await page.locator("link[rel=stylesheet][href='/assets/css/styles.css']").count(), 1, "404 page loads its assets from any depth");
+  assert.strictEqual(await page.locator("#site-header .logo").count(), 1, "site chrome renders on the 404 page");
+
+  const draft = await page.goto(base + "/product/upcoming-course/");
+  assert.strictEqual(draft.status(), 404, "draft products are not published");
+  await page.goto(base + "/product/%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E/");
   assert.strictEqual(await page.locator("#view img").count(), 0, "no HTML injection");
-  step("product page, tabs, reviews, JSON-LD, 404 + injection");
+  step("product page: pre-render, single licence, tabs, reviews, JSON-LD, redirects, 404s");
   await page.close();
 }
 

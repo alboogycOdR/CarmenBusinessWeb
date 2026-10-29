@@ -12,6 +12,15 @@ const ctx = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(root, "assets/js/site-config.js"), "utf8"), ctx);
 const S = ctx.window.SITE;
 const pages = fs.readdirSync(root).filter((f) => f.endsWith(".html"));
+const GENERATED = new Set(["/assets/js/catalog.js"]); // written by scripts/build.mts
+
+/* Products exactly as the storefront receives them: real `public_catalog` rows
+ * (tests/fixtures, exported from the seeded database) through the build transform. */
+let P = [];
+test.before(async () => {
+  const B = await import("../scripts/build.mts");
+  P = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/public_catalog.json"), "utf8")).map(B.toProduct);
+});
 
 test("esc neutralises HTML", () => {
   assert.strictEqual(L.esc('<img src=x onerror="a()">&\''), "&lt;img src=x onerror=&quot;a()&quot;&gt;&amp;&#39;");
@@ -26,14 +35,13 @@ test("formatPrice / toCents", () => {
 });
 
 test("categories combine type label and tags, deduplicated", () => {
-  const cats = L.allCategories(S.products);
-  assert.ok(cats.includes("Courses") && cats.includes("Books") && cats.includes("Bundles"));
+  const cats = L.allCategories(P);
+  for (const c of ["Courses", "Books", "Guides", "Templates", "Bundles"]) assert.ok(cats.includes(c), c);
   assert.strictEqual(new Set(cats).size, cats.length);
   assert.deepStrictEqual(L.categoriesOf({ type: "book", tags: ["Mindset"] }), ["Books", "Mindset"]);
 });
 
 test("filterProducts: text, price range, categories (any-of)", () => {
-  const P = S.products;
   assert.strictEqual(L.filterProducts(P, {}).length, P.length);
   assert.ok(L.filterProducts(P, { q: "WORKBOOK" }).every((p) => /workbook/i.test(p.title + p.summary + (p.subtitle || ""))));
   assert.ok(L.filterProducts(P, { min: 100, max: 250 }).every((p) => p.price >= 100 && p.price <= 250));
@@ -41,12 +49,12 @@ test("filterProducts: text, price range, categories (any-of)", () => {
   const books = L.filterProducts(P, { cats: ["Books"] });
   assert.ok(books.length > 0 && books.every((p) => p.type === "book"));
   const either = L.filterProducts(P, { cats: ["Books", "Courses"] });
-  assert.strictEqual(either.length, P.filter((p) => p.type !== "bundle").length);
+  assert.strictEqual(either.length, P.filter((p) => p.type === "book" || p.type === "course").length);
   assert.strictEqual(L.filterProducts(P, { q: "zzzz-no-match" }).length, 0);
 });
 
 test("sortProducts does not mutate and orders correctly", () => {
-  const P = S.products, ids = P.map((p) => p.id);
+  const ids = P.map((p) => p.id);
   const asc = L.sortProducts(P, "price-asc");
   assert.deepStrictEqual(P.map((p) => p.id), ids);
   for (let i = 1; i < asc.length; i++) assert.ok(asc[i - 1].price <= asc[i].price);
@@ -77,13 +85,28 @@ test("cart: add, set, remove, cap, count", () => {
   assert.deepStrictEqual(L.cartSet(c, "a", "junk"), [{ id: "b", qty: 1 }]);
 });
 
+test("ADR-0008: licences are quantity 1 unless the product allows more", () => {
+  assert.strictEqual(L.maxQtyFor({ allowQuantity: false }), 1);
+  assert.strictEqual(L.maxQtyFor({}), 1);
+  assert.strictEqual(L.maxQtyFor(null), 1);
+  assert.strictEqual(L.maxQtyFor({ allowQuantity: true }), L.MAX_QTY);
+  let c = L.cartAdd([], "course", 1, 1);
+  c = L.cartAdd(c, "course", 1, 1);
+  c = L.cartAdd(c, "course", 5, 1);
+  assert.deepStrictEqual(c, [{ id: "course", qty: 1 }], "adding twice keeps one licence");
+  assert.strictEqual(L.cartSet(c, "course", 7, 1)[0].qty, 1);
+  assert.ok(P.every((p) => p.allowQuantity === false), "seeded catalogue sells single licences");
+});
+
 test("parseCart rejects junk, unknown ids and duplicates", () => {
-  const ok = S.products[0].id;
-  assert.deepStrictEqual(L.parseCart("not json", S.products), []);
-  assert.deepStrictEqual(L.parseCart('{"a":1}', S.products), []);
-  assert.deepStrictEqual(L.parseCart(null, S.products), []);
+  const ok = P[0].id;
+  assert.deepStrictEqual(L.parseCart("not json", P), []);
+  assert.deepStrictEqual(L.parseCart('{"a":1}', P), []);
+  assert.deepStrictEqual(L.parseCart(null, P), []);
   const raw = JSON.stringify([{ id: ok, qty: 2 }, { id: ok, qty: 9 }, { id: "ghost", qty: 1 }, { id: ok + "x", qty: 0 }, null, { id: 5, qty: 1 }]);
-  assert.deepStrictEqual(L.parseCart(raw, S.products), [{ id: ok, qty: 2 }]);
+  assert.deepStrictEqual(L.parseCart(raw, P), [{ id: ok, qty: 1 }], "stored quantity is clamped to the licence limit");
+  const multi = [{ ...P[0], allowQuantity: true }];
+  assert.deepStrictEqual(L.parseCart(JSON.stringify([{ id: ok, qty: 3 }]), multi), [{ id: ok, qty: 3 }]);
 });
 
 test("cartTotals: exact cents, discount code, invalid code", () => {
@@ -133,45 +156,42 @@ test("isEmail / mailtoHref", () => {
   assert.match(L.mailtoHref("hi@x.com", "A B", "line\n2"), /^mailto:hi@x\.com\?subject=A%20B&body=line%0A2$/);
 });
 
-test("config: products valid, ids unique, hero/reviews reference real products", () => {
-  const ids = new Set();
-  for (const p of S.products) {
-    assert.ok(/^[a-z0-9-]+$/.test(p.id), `bad id ${p.id}`);
-    assert.ok(!ids.has(p.id), `duplicate ${p.id}`);
-    ids.add(p.id);
-    assert.ok(["course", "book", "bundle"].includes(p.type), p.id);
-    assert.ok(p.title && p.summary && p.price > 0, p.id);
-    assert.ok(Array.isArray(p.description) && p.description.length && Array.isArray(p.included) && p.included.length, p.id);
-    assert.ok(Array.isArray(p.color) && p.color.length === 2, p.id);
-    assert.ok(p.checkoutUrl === "" || L.safeUrl(p.checkoutUrl) !== "", `unsafe checkout ${p.id}`);
-    assert.ok(p.image === "" || L.safeUrl(p.image) !== "", `unsafe image ${p.id}`);
-    assert.strictEqual(Math.round(p.price * 100) / 100, p.price, `price has >2 decimals ${p.id}`);
-  }
+test("config: content is valid and reviews reference published products", () => {
+  assert.strictEqual(S.products, undefined, "products live in the database, not in site-config.js");
+  const ids = new Set(P.map((p) => p.id));
   for (const r of S.reviews) {
     assert.ok(ids.has(r.productId), `review for unknown product ${r.productId}`);
     assert.ok(r.rating >= 1 && r.rating <= 5 && /^\d{4}-\d{2}-\d{2}$/.test(r.date), JSON.stringify(r));
+    assert.notStrictEqual(r.verified, true, "placeholder reviews must not claim to be verified (G8)");
   }
-  assert.ok(S.products.length > S.shop.perPage, "sample catalogue should demo pagination");
+  assert.ok(P.length > S.shop.perPage, "sample catalogue should demo pagination");
   for (const [code, rule] of Object.entries(S.checkout.discounts)) assert.ok(rule.percent > 0 && rule.percent < 100, code);
   assert.ok(S.checkout.discounts[S.popup.code], "popup code must be a valid discount");
 });
 
 test("every page has metadata and loads the shared scripts; local refs resolve", () => {
-  assert.ok(pages.length >= 11);
-  for (const f of pages) {
+  assert.ok(pages.length >= 10);
+  assert.ok(!pages.includes("product.html"), "product pages are generated from templates/product.html");
+  for (const f of [...pages, "templates/product.html"]) {
     const html = fs.readFileSync(path.join(root, f), "utf8");
     assert.match(html, /<title>[^<]+<\/title>/, `${f} title`);
     assert.match(html, /name="viewport"/, `${f} viewport`);
     assert.match(html, /<html lang="en">/, `${f} lang`);
     if (f !== "404.html" && !/legal/.test(html.match(/data-page="(\w+)"/)[1])) assert.match(html, /id="view"/, `${f} view`);
-    for (const s of ["site-config.js", "lib.js", "main.js"]) assert.ok(html.includes(`assets/js/${s}`), `${f} missing ${s}`);
+    const order = ["site-config.js", "catalog.js", "lib.js", "render.js", "main.js"].map((s) => html.indexOf(`src="/assets/js/${s}"`));
+    assert.ok(order.every((n) => n > 0), `${f} must load all five scripts`);
+    assert.deepStrictEqual([...order].sort((a, b) => a - b), order, `${f} loads scripts in dependency order`);
     for (const m of html.matchAll(/(?:src|href)="([^"#?:]+\.(?:js|css|svg|html))(?:[?#][^"]*)?"/g)) {
-      assert.ok(fs.existsSync(path.join(root, m[1])), `${f} -> missing ${m[1]}`);
+      assert.ok(m[1].startsWith("/"), `${f}: link ${m[1]} must be root-absolute (pages live at /product/<slug>/)`);
+      if (!GENERATED.has(m[1])) assert.ok(fs.existsSync(path.join(root, m[1])), `${f} -> missing ${m[1]}`);
     }
   }
 });
 
 test("nav, footer and config links point at real pages", () => {
-  for (const n of S.nav) assert.ok(fs.existsSync(path.join(root, n.href.split(/[?#]/)[0])), n.href);
+  for (const n of S.nav) {
+    const file = n.href === "/" ? "index.html" : n.href.replace(/^\//, "").split(/[?#]/)[0];
+    assert.ok(fs.existsSync(path.join(root, file)), n.href);
+  }
   for (const f of ["terms.html", "privacy.html", "cart.html", "success.html"]) assert.ok(pages.includes(f), f);
 });

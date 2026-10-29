@@ -1,17 +1,23 @@
-/* Renders the shared chrome and every page from window.SITE. */
+/* Renders the shared chrome and every page from window.SITE (content) and
+ * window.CATALOG (products, generated from the database at build time). */
 (function () {
   "use strict";
   const S = window.SITE;
   const L = window.SiteLib;
+  const R = window.SiteRender;
+  const PRODUCTS = window.CATALOG || [];
   const { esc } = L;
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const view = () => document.getElementById("view");
   const page = document.body.getAttribute("data-page") || "";
-  const money = (n) => L.formatPrice(n, S.brand.currency);
+  // The build guarantees one currency across the catalogue (scripts/build.mts).
+  const CURRENCY = (PRODUCTS[0] && PRODUCTS[0].currency) || S.brand.currency;
+  const money = (n) => L.formatPrice(n, CURRENCY);
   const cents = (c) => money(c / 100);
   const params = () => new URLSearchParams(location.search);
-  const pdp = (id) => `product.html?id=${encodeURIComponent(id)}`;
+  const pdp = R.urls.product;
+  const limitFor = (id) => L.maxQtyFor(L.getProduct(PRODUCTS, id));
 
   /* ---------- Storage (never throws: private mode / blocked storage) ---------- */
   const store = {
@@ -21,43 +27,15 @@
   };
 
   /* ---------- Cart state ---------- */
-  let cart = L.parseCart(store.get("cw_cart"), S.products);
+  let cart = L.parseCart(store.get("cw_cart"), PRODUCTS);
   let code = store.get("cw_code") || "";
   const saveCart = () => { store.set("cw_cart", JSON.stringify(cart)); refreshCart(); };
   const setCode = (c) => { code = c; c ? store.set("cw_code", c) : store.del("cw_code"); refreshCart(); };
-  const lines = () => L.cartLines(cart, S.products);
+  const lines = () => L.cartLines(cart, PRODUCTS);
   const totals = () => L.cartTotals(lines(), code, S.checkout.discounts);
 
-  /* ---------- Product visuals ---------- */
-  function media(p, cls) {
-    const img = L.safeUrl(p.image);
-    if (img) return `<img class="${cls || ""}" src="${esc(img)}" alt="${esc(p.title)}" loading="lazy">`;
-    const c = p.color || ["#e50069", "#ff7eb3"];
-    return `<div class="cover cover-${esc(p.type)} ${cls || ""}" style="--c1:${esc(c[0])};--c2:${esc(c[1])}" role="img" aria-label="${esc(p.title)}">
-      <span class="cover-type">${esc(L.TYPE_LABEL[p.type] || "")}</span>
-      <span class="cover-title">${esc(p.title.split(":")[0])}</span></div>`;
-  }
-
-  const priceHtml = (p) => {
-    const off = L.discountPercent(p);
-    return `<span class="price"><strong>${money(p.price)}</strong>${off ? ` <s>${money(p.compareAt)}</s> <em>Save ${off}%</em>` : ""}</span>`;
-  };
-
-  const stars = (value) =>
-    `<span class="stars" role="img" aria-label="${value} out of 5 stars" style="--pct:${Math.max(0, Math.min(100, (value / 5) * 100))}%">★★★★★</span>`;
-
-  const fmtDate = (iso) => {
-    const d = new Date(iso + "T00:00:00Z");
-    return isNaN(d) ? "" : d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-  };
-
-  function card(p) {
-    return `<article class="card">
-      <a class="thumb" href="${pdp(p.id)}" aria-label="${esc(p.title)}">${p.badge ? `<span class="badge">${esc(p.badge)}</span>` : ""}${media(p)}</a>
-      <h2><a href="${pdp(p.id)}">${esc(p.title)}</a></h2>
-      ${priceHtml(p)}
-      <button class="btn" type="button" data-add="${esc(p.id)}">Add to cart</button></article>`;
-  }
+  /* ---------- Product visuals (shared with the build: assets/js/render.js) ---------- */
+  const { media, card, stars } = R;
 
   /* ---------- Chrome ---------- */
   const icon = {
@@ -66,13 +44,13 @@
   };
 
   function renderChrome() {
-    const here = location.pathname.split("/").pop() || "index.html";
+    const here = location.pathname === "/index.html" ? "/" : location.pathname;
     const nav = S.nav.map((n) => `<li><a href="${esc(n.href)}"${n.href === here ? ' aria-current="page"' : ""}>${esc(n.label)}</a></li>`).join("");
     document.getElementById("site-header").innerHTML = `
       <a class="skip" href="#main">Skip to content</a>
       ${S.announcement ? `<div class="announce">${esc(S.announcement)}</div>` : ""}
       <div class="container bar">
-        <a class="logo" href="index.html" aria-label="${esc(S.brand.name)} home">${esc(S.brand.name)}</a>
+        <a class="logo" href="/" aria-label="${esc(S.brand.name)} home">${esc(S.brand.name)}</a>
         <nav id="primary-nav" aria-label="Primary"><ul>${nav}</ul></nav>
         <button class="cart-btn" type="button" data-open-cart aria-label="Open cart">${icon.cart}<span class="cart-count" data-cart-count>0</span></button>
         <button class="menu-btn" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Menu"><span></span><span></span><span></span></button>
@@ -81,11 +59,11 @@
       .map((k) => `<a href="${esc(S.brand.social[k])}" rel="noopener" target="_blank">${esc(k[0].toUpperCase() + k.slice(1))}</a>`).join("");
     document.getElementById("site-footer").innerHTML = `
       <div class="container foot">
-        <div><a class="logo" href="index.html">${esc(S.brand.name)}</a><p>${esc(S.brand.tagline)}</p>
+        <div><a class="logo" href="/">${esc(S.brand.name)}</a><p>${esc(S.brand.tagline)}</p>
         <p class="small">Need help accessing your purchase? Email <a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a></p></div>
         <div class="foot-links">${social}</div>
       </div>
-      <div class="container legal">&copy; ${new Date().getFullYear()} ${esc(S.brand.name)}. All rights reserved. &middot; <a href="terms.html">Terms &amp; Conditions</a> &middot; <a href="privacy.html">Privacy Policy</a></div>`;
+      <div class="container legal">&copy; ${new Date().getFullYear()} ${esc(S.brand.name)}. All rights reserved. &middot; <a href="/terms.html">Terms &amp; Conditions</a> &middot; <a href="/privacy.html">Privacy Policy</a></div>`;
 
     const btn = $(".menu-btn"), navEl = $("#primary-nav");
     btn.addEventListener("click", () => btn.setAttribute("aria-expanded", String(navEl.classList.toggle("open"))));
@@ -95,7 +73,10 @@
       <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Shopping cart" hidden></aside>`);
     document.addEventListener("click", (e) => {
       const add = e.target.closest("[data-add]");
-      if (add) { cart = L.cartAdd(cart, add.getAttribute("data-add"), add.getAttribute("data-qty") || 1); saveCart(); openDrawer(); }
+      if (add) {
+        const id = add.getAttribute("data-add");
+        cart = L.cartAdd(cart, id, add.getAttribute("data-qty") || 1, limitFor(id)); saveCart(); openDrawer();
+      }
       if (e.target.closest("[data-open-cart]")) openDrawer();
       if (e.target.closest("[data-close]")) closeLayers();
     });
@@ -127,14 +108,16 @@
 
   function lineRow(l, compact) {
     const p = l.product;
+    // ADR-0008: quantity controls only for products that allow more than one licence.
+    const controls = p.allowQuantity ? `
+          <button type="button" data-dec aria-label="Decrease quantity of ${esc(p.title)}">&minus;</button>
+          <input type="number" min="0" max="${L.MAX_QTY}" value="${l.qty}" aria-label="Quantity of ${esc(p.title)}" data-qty-input>
+          <button type="button" data-inc aria-label="Increase quantity of ${esc(p.title)}">+</button>` : "";
     return `<li class="line">
       <a class="line-img" href="${pdp(p.id)}">${media(p)}</a>
       <div class="line-body"><a href="${pdp(p.id)}">${esc(p.title)}</a><span class="muted">${money(p.price)}</span>
-        <div class="qty" data-line="${esc(p.id)}">
-          <button type="button" data-dec aria-label="Decrease quantity of ${esc(p.title)}">&minus;</button>
-          <input type="number" min="0" max="${L.MAX_QTY}" value="${l.qty}" aria-label="Quantity of ${esc(p.title)}" data-qty-input>
-          <button type="button" data-inc aria-label="Increase quantity of ${esc(p.title)}">+</button>
-          <button type="button" class="link" data-remove>${compact ? "Remove" : "Remove item"}</button></div></div>
+        <div class="qty" data-line="${esc(p.id)}">${controls}
+          <button type="button" class="link" data-remove aria-label="Remove ${esc(p.title)}">${compact ? "Remove" : "Remove item"}</button></div></div>
       <strong class="line-total">${cents(l.cents)}</strong></li>`;
   }
 
@@ -149,9 +132,9 @@
     const l = lines(), d = $("#drawer");
     d.innerHTML = `<div class="drawer-head"><h2>Your cart</h2><button type="button" class="x" data-close aria-label="Close cart">&times;</button></div>
       ${l.length ? `<ul class="lines">${l.map((x) => lineRow(x, true)).join("")}</ul>${totalsHtml(totals())}
-        <a class="btn btn-block" href="cart.html">View my cart</a>
-        <a class="btn btn-dark btn-block" href="cart.html#checkout">Go to checkout</a>`
-        : `<p>Your cart is currently empty!</p><a class="btn btn-block" href="index.html" data-close>Start shopping</a>`}`;
+        <a class="btn btn-block" href="/cart.html">View my cart</a>
+        <a class="btn btn-dark btn-block" href="/cart.html#checkout">Go to checkout</a>`
+        : `<p>Your cart is currently empty!</p><a class="btn btn-block" href="/" data-close>Start shopping</a>`}`;
   }
 
   function wireQty(root) {
@@ -160,8 +143,8 @@
       if (!wrap) return;
       const id = wrap.getAttribute("data-line");
       const cur = (cart.find((i) => i.id === id) || { qty: 0 }).qty;
-      if (e.target.closest("[data-inc]")) cart = L.cartSet(cart, id, cur + 1);
-      else if (e.target.closest("[data-dec]")) cart = L.cartSet(cart, id, cur - 1);
+      if (e.target.closest("[data-inc]")) cart = L.cartSet(cart, id, cur + 1, limitFor(id));
+      else if (e.target.closest("[data-dec]")) cart = L.cartSet(cart, id, cur - 1, limitFor(id));
       else if (e.target.closest("[data-remove]")) cart = L.cartSet(cart, id, 0);
       else return;
       saveCart();
@@ -169,7 +152,8 @@
     root.addEventListener("change", (e) => {
       const input = e.target.closest("[data-qty-input]");
       if (!input) return;
-      cart = L.cartSet(cart, input.closest("[data-line]").getAttribute("data-line"), input.value);
+      const id = input.closest("[data-line]").getAttribute("data-line");
+      cart = L.cartSet(cart, id, input.value, limitFor(id));
       saveCart();
     });
   }
@@ -263,8 +247,8 @@
   /* ---------- Pages ---------- */
   function renderShop() {
     const q = params();
-    const cats = L.allCategories(S.products);
-    const prices = S.products.map((p) => p.price);
+    const cats = L.allCategories(PRODUCTS);
+    const prices = PRODUCTS.length ? PRODUCTS.map((p) => p.price) : [0];
     const lo = Math.floor(Math.min.apply(null, prices)), hi = Math.ceil(Math.max.apply(null, prices));
     const initialCats = (q.get("cat") || "").split(",").filter(Boolean);
     view().innerHTML = `
@@ -273,7 +257,7 @@
         <button class="btn btn-ghost filter-toggle" type="button" aria-expanded="false" aria-controls="filters">Filters</button>
         <form id="filters" class="filters" role="search" novalidate>
           <div class="searchbox"><label class="sr" for="f-q">Search products</label><input id="f-q" type="search" name="q" placeholder="Search products…" value="${esc(q.get("q") || "")}"><button class="btn btn-icon" type="submit" aria-label="Search">${icon.search}</button></div>
-          <fieldset><legend>Price</legend><div class="price-range"><label class="sr" for="f-min">Minimum price</label><input id="f-min" type="number" name="min" min="0" placeholder="$${lo}" value="${esc(q.get("min") || "")}"><span>to</span><label class="sr" for="f-max">Maximum price</label><input id="f-max" type="number" name="max" min="0" placeholder="$${hi}" value="${esc(q.get("max") || "")}"></div></fieldset>
+          <fieldset><legend>Price</legend><div class="price-range"><label class="sr" for="f-min">Minimum price</label><input id="f-min" type="number" name="min" min="0" placeholder="${esc(money(lo))}" value="${esc(q.get("min") || "")}"><span>to</span><label class="sr" for="f-max">Maximum price</label><input id="f-max" type="number" name="max" min="0" placeholder="${esc(money(hi))}" value="${esc(q.get("max") || "")}"></div></fieldset>
           <fieldset><legend>Categories</legend>${cats.map((c) => `<label class="check"><input type="checkbox" name="cat" value="${esc(c)}"${initialCats.indexOf(c) > -1 ? " checked" : ""}> ${esc(c)}</label>`).join("")}</fieldset>
           <button type="button" class="link" data-reset>Clear all filters</button>
         </form>
@@ -297,11 +281,11 @@
       if (s.sort !== "featured") u.set("sort", s.sort);
       if (p > 1) u.set("page", p);
       const str = u.toString();
-      return str ? "?" + str : location.pathname.split("/").pop() || "index.html";
+      return str ? "?" + str : location.pathname;
     }
     function draw() {
       const s = state();
-      const found = L.sortProducts(L.filterProducts(S.products, s), s.sort);
+      const found = L.sortProducts(L.filterProducts(PRODUCTS, s), s.sort);
       const pg = L.paginate(found, pageNo, S.shop.perPage);
       pageNo = pg.page;
       try { history.replaceState(null, "", qs(s, pg.page)); } catch (e) { /* file:// */ }
@@ -323,58 +307,26 @@
     draw();
   }
 
-  function reviewItem(r, withProduct) {
-    const p = L.getProduct(S.products, r.productId);
-    return `<li class="review"><div class="review-head"><strong>${esc(r.name)}</strong><span class="verified">Verified buyer</span></div>
-      <div class="review-meta">${stars(r.rating)}${withProduct && p ? ` <a href="${pdp(p.id)}">${esc(p.title)}</a>` : ""}<time datetime="${esc(r.date)}">${esc(fmtDate(r.date))}</time></div>
-      <p>${esc(r.text)}</p></li>`;
-  }
+  const reviewItem = (r, withProduct) => R.reviewItem(r, withProduct, PRODUCTS);
+  const summaryHtml = R.summaryHtml;
 
-  function summaryHtml(sum) {
-    const rows = [5, 4, 3, 2, 1].map((s) => `<li><span>${s}★</span><div class="meter" role="img" aria-label="${sum.dist[s]}% gave ${s} stars"><i style="width:${sum.dist[s]}%"></i></div><span>${sum.dist[s]}%</span></li>`).join("");
-    return `<div class="summary"><div class="score"><strong>${sum.average.toFixed(1)}</strong>${stars(sum.average)}<span class="muted">Based on ${sum.count.toLocaleString("en-US")} review${sum.count === 1 ? "" : "s"}</span></div><ul class="dist">${rows}</ul></div>`;
-  }
-
+  /* Product pages are pre-rendered at build time (/product/<slug>/) with SEO
+   * metadata and JSON-LD; this re-renders the same markup and wires events. */
   function renderProduct() {
-    const id = params().get("id");
-    const p = L.getProduct(S.products, id);
+    const slug = document.body.getAttribute("data-product") || "";
+    const p = L.getProduct(PRODUCTS, slug);
     if (!p) {
-      document.title = "Product not found | " + S.brand.name;
-      view().innerHTML = '<div class="narrow"><h1>Product not found</h1><p><a class="btn" href="index.html">Back to the shop</a></p></div>';
+      view().innerHTML = '<div class="narrow"><h1>Product not found</h1><p><a class="btn" href="/">Back to the shop</a></p></div>';
       return;
     }
-    document.title = `${p.title} | ${S.brand.name}`;
-    const meta = $('meta[name="description"]'); if (meta) meta.setAttribute("content", p.summary);
     const revs = L.sortReviews(L.filterReviews(S.reviews, { productId: p.id }), "recent");
-    const ld = { "@context": "https://schema.org", "@type": "Product", name: p.title, description: p.summary,
-      offers: { "@type": "Offer", price: p.price, priceCurrency: S.brand.currency, availability: "https://schema.org/InStock" } };
-    if (revs.length) { const s = L.reviewSummary(revs); ld.aggregateRating = { "@type": "AggregateRating", ratingValue: s.average, reviewCount: s.count }; }
-    const tag = document.createElement("script"); tag.type = "application/ld+json";
-    tag.textContent = JSON.stringify(ld).replace(/</g, "\\u003c"); document.head.appendChild(tag);
-
-    const buy = L.safeUrl(p.checkoutUrl);
-    const related = S.products.filter((o) => o.id !== p.id && o.type === p.type).slice(0, 3);
-    view().innerHTML = `
-      <div class="container product">
-        <div class="product-media">${media(p)}</div>
-        <div class="product-info"><h1>${esc(p.title)}</h1><p class="price-lg">${priceHtml(p)}</p><p>${esc(p.summary)}</p>
-          <div class="buy"><label class="qty-field"><span class="sr">Quantity</span><input id="qty" type="number" min="1" max="${L.MAX_QTY}" value="1"></label>
-            <button class="btn" type="button" id="add-main">Add to cart</button>
-            ${buy ? `<a class="btn btn-dark" href="${esc(buy)}" rel="noopener">Buy now</a>` : ""}</div>
-          <p class="cats">Category: ${L.categoriesOf(p).map((c) => `<a href="index.html?cat=${encodeURIComponent(c)}">${esc(c)}</a>`).join(", ")}</p></div></div>
-      <div class="container tabs-wrap">
-        <div class="tabs" role="tablist" aria-label="Product details">
-          <button role="tab" id="t-desc" aria-controls="p-desc" aria-selected="true">Description</button>
-          <button role="tab" id="t-info" aria-controls="p-info" aria-selected="false" tabindex="-1">Additional information</button>
-          <button role="tab" id="t-rev" aria-controls="p-rev" aria-selected="false" tabindex="-1">Reviews (${revs.length})</button></div>
-        <div role="tabpanel" id="p-desc" aria-labelledby="t-desc"><h2>What's Included:</h2>${p.description.map((d) => `<p>${esc(d)}</p>`).join("")}<ul class="ticks">${p.included.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>
-        <div role="tabpanel" id="p-info" aria-labelledby="t-info" hidden><table class="info">${Object.keys(p.info || {}).map((k) => `<tr><th scope="row">${esc(k)}</th><td>${esc(p.info[k])}</td></tr>`).join("")}</table></div>
-        <div role="tabpanel" id="p-rev" aria-labelledby="t-rev" hidden>${revs.length ? summaryHtml(L.reviewSummary(revs)) + `<ul class="reviews">${revs.map((r) => reviewItem(r, false)).join("")}</ul>` : "<p>There are no reviews yet.</p>"}</div></div>
-      ${related.length ? `<div class="container related"><h2>You may also like</h2><div class="grid">${related.map(card).join("")}</div></div>` : ""}`;
+    const related = PRODUCTS.filter((o) => o.id !== p.id && o.type === p.type).slice(0, 3);
+    view().innerHTML = R.productView(p, revs, related);
 
     $("#add-main").addEventListener("click", () => {
-      const qty = Math.max(1, Math.min(L.MAX_QTY, parseInt($("#qty").value, 10) || 1));
-      cart = L.cartAdd(cart, p.id, qty); saveCart(); openDrawer();
+      const qtyEl = $("#qty");
+      const qty = qtyEl ? Math.max(1, Math.min(L.MAX_QTY, parseInt(qtyEl.value, 10) || 1)) : 1;
+      cart = L.cartAdd(cart, p.id, qty, limitFor(p.id)); saveCart(); openDrawer();
     });
     const tabs = $$('[role="tab"]');
     const select = (t) => tabs.forEach((x) => {
@@ -398,13 +350,13 @@
       ${l.length ? `<div class="cart-grid"><ul class="lines">${l.map((x) => lineRow(x, false)).join("")}</ul>
         <div class="cart-side"><form class="coupon" data-coupon novalidate><label for="cp">Discount code</label><div><input id="cp" name="code" value="${esc(code)}" autocomplete="off"><button class="btn btn-dark" type="submit">Apply</button></div>${codeMsg}</form>
           ${totalsHtml(t)}<button class="btn btn-block" id="checkout" type="button">Go to checkout</button><div id="checkout-msg" role="status" aria-live="polite"></div></div></div>`
-        : '<p>Your cart is currently empty!</p><p><a class="btn" href="index.html">Start shopping</a></p>'}</div>`;
+        : '<p>Your cart is currently empty!</p><p><a class="btn" href="/">Start shopping</a></p>'}</div>`;
     const f = $("[data-coupon]");
     if (f) f.addEventListener("submit", (e) => { e.preventDefault(); setCode($("#cp").value.trim().toUpperCase()); });
     const b = $("#checkout"); if (b) b.addEventListener("click", checkout);
   }
 
-  /* Server checkout if configured; otherwise per-item links or an emailed order. */
+  /* Server checkout if configured (Payfast, PR 3); until then the customer can email their order. */
   function checkout() {
     const msg = $("#checkout-msg"), btn = $("#checkout");
     const l = lines(), t = totals();
@@ -417,8 +369,7 @@
       return;
     }
     const order = l.map((x) => `${x.qty} x ${x.product.title} (${money(x.product.price)})`).join("\n") + `\nTotal: ${cents(t.total)}${t.code ? " (code " + t.code + ")" : ""}`;
-    const pay = l.filter((x) => L.safeUrl(x.product.checkoutUrl)).map((x) => `<li><a class="btn btn-sm" href="${esc(x.product.checkoutUrl)}" rel="noopener">Pay for ${esc(x.product.title)}</a></li>`).join("");
-    msg.innerHTML = `<div class="notice"><p><strong>Complete your order</strong></p>${pay ? `<ul class="pay">${pay}</ul>` : ""}
+    msg.innerHTML = `<div class="notice"><p><strong>Complete your order</strong></p>
       <p><a href="${esc(L.mailtoHref(S.brand.email, "Order request", order))}">Email my order</a> and we will send a secure payment link.</p></div>`;
   }
 
@@ -447,7 +398,7 @@
     const f = S.free;
     view().innerHTML = `<header class="page-head"><div class="container"><h1>${esc(f.title)}</h1><p>${esc(f.intro)}</p></div></header>
       <div class="container"><div class="grid free-grid">${f.items.map((it) => `<article class="card free"><h2>${esc(it.title)}</h2><p>${esc(it.text)}</p>
-        ${it.popup ? `<button class="btn" type="button" data-signup>${esc(it.cta)}</button>` : `<a class="btn" href="${esc(L.safeUrl(it.url) || "contact.html")}" rel="noopener" target="_blank">${esc(it.cta)}</a>`}</article>`).join("")}</div></div>`;
+        ${it.popup ? `<button class="btn" type="button" data-signup>${esc(it.cta)}</button>` : `<a class="btn" href="${esc(L.safeUrl(it.url) || "/contact.html")}" rel="noopener" target="_blank">${esc(it.cta)}</a>`}</article>`).join("")}</div></div>`;
     $$("[data-signup]").forEach((b) => b.addEventListener("click", () => {
       store.del("cw_popup"); if (!$(".popup")) setupPopup(); (window.__openPopup || function () {})();
     }));
@@ -455,12 +406,12 @@
 
   function renderAbout() {
     const a = S.about, ph = L.safeUrl(a.photo);
-    view().innerHTML = `<div class="container narrow-lg about"><div><h1>${esc(a.headline)}</h1>${a.long.map((t) => `<p>${esc(t)}</p>`).join("")}<p><a class="btn" href="index.html">Shop courses &amp; books</a></p></div>
+    view().innerHTML = `<div class="container narrow-lg about"><div><h1>${esc(a.headline)}</h1>${a.long.map((t) => `<p>${esc(t)}</p>`).join("")}<p><a class="btn" href="/">Shop courses &amp; books</a></p></div>
       ${ph ? `<img src="${esc(ph)}" alt="${esc(S.brand.name)}" loading="lazy">` : ""}</div>`;
   }
 
   function renderContact() {
-    const pid = params().get("product"), p = pid && L.getProduct(S.products, pid);
+    const pid = params().get("product"), p = pid && L.getProduct(PRODUCTS, pid);
     view().innerHTML = `<div class="container narrow-lg"><h1>Have a question for ${esc(S.brand.name)}?</h1>
       <form class="form" data-form="contact" novalidate>
         <div class="two"><div><label for="c-first">First name <b>*</b></label><input id="c-first" name="first" autocomplete="given-name" required></div><div><label for="c-last">Last name</label><input id="c-last" name="last" autocomplete="family-name"></div></div>
@@ -472,7 +423,7 @@
 
   function renderSuccess() {
     cart = []; saveCart(); setCode("");
-    view().innerHTML = `<div class="narrow center"><h1>Thank you!</h1><p>Your order is confirmed. A receipt and your access details are on their way to your inbox.</p><p class="muted">Need help? Email <a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a>.</p><p><a class="btn" href="index.html">Keep shopping</a></p></div>`;
+    view().innerHTML = `<div class="narrow center"><h1>Thank you!</h1><p>Your order is confirmed. A receipt and your access details are on their way to your inbox.</p><p class="muted">Need help? Email <a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a>.</p><p><a class="btn" href="/">Keep shopping</a></p></div>`;
   }
 
   /* ---------- Boot ---------- */

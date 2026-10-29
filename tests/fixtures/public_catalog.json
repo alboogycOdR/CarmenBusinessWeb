@@ -1,0 +1,398 @@
+[
+  {
+    "id": "a0000000-0000-4000-8000-000000000001",
+    "slug": "signature-course",
+    "type": "course",
+    "title": "The Signature Course: Your Complete Programme",
+    "subtitle": null,
+    "summary": "A self-paced video programme with workbooks, templates and a private community.",
+    "description": [
+      "Replace this with the transformation the course delivers and who it is for."
+    ],
+    "included": [
+      "The complete step-by-step roadmap, from first idea to first customers.",
+      "Plug-and-play templates and swipe files you can copy today.",
+      "Real examples from our own tested campaigns.",
+      "Private student community for feedback and accountability.",
+      "Lifetime access and free updates."
+    ],
+    "info": {
+      "Level": "Beginner to intermediate",
+      "Access": "Lifetime",
+      "Format": "Video lessons + PDF workbook",
+      "Duration": "6 hours"
+    },
+    "images": [],
+    "display": {
+      "badge": "Best seller",
+      "color": [
+        "#e50069",
+        "#ff7eb3"
+      ]
+    },
+    "price_minor": 19700,
+    "compare_at_minor": 29700,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 1,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Marketing",
+      "Beginner"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000002",
+    "slug": "starter-course",
+    "type": "course",
+    "title": "Starter Foundations: Your First Win",
+    "subtitle": null,
+    "summary": "Three focused lessons you can finish in a weekend.",
+    "description": [
+      "Perfect for beginners who want a quick, low-risk way to start."
+    ],
+    "included": [
+      "3 short video lessons.",
+      "Quick-start checklist.",
+      "Lifetime access."
+    ],
+    "info": {
+      "Level": "Beginner",
+      "Access": "Lifetime",
+      "Format": "Video lessons",
+      "Duration": "1 hour"
+    },
+    "images": [],
+    "display": {
+      "badge": "New",
+      "color": [
+        "#4915e5",
+        "#a58bff"
+      ]
+    },
+    "price_minor": 4700,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 2,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Beginner"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000003",
+    "slug": "masterclass",
+    "type": "course",
+    "title": "Live Masterclass Replay with Q&A",
+    "subtitle": null,
+    "summary": "A 3-hour deep-dive workshop plus the full Q&A recording.",
+    "description": [
+      "Replace with details of the masterclass content."
+    ],
+    "included": [
+      "3 hours of recorded training.",
+      "Slides and notes.",
+      "Full Q&A recording."
+    ],
+    "info": {
+      "Level": "All levels",
+      "Access": "Lifetime",
+      "Format": "Video replay",
+      "Duration": "3 hours"
+    },
+    "images": [],
+    "display": {
+      "color": [
+        "#142341",
+        "#4a6fa5"
+      ]
+    },
+    "price_minor": 7900,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 3,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Marketing"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000004",
+    "slug": "mindset-course",
+    "type": "course",
+    "title": "Confident Action: A Mindset Course",
+    "subtitle": null,
+    "summary": "Practical exercises to build confidence and follow through.",
+    "description": [
+      "Replace with course details."
+    ],
+    "included": [
+      "5 guided lessons.",
+      "Daily action planner.",
+      "Audio versions for on the go."
+    ],
+    "info": {
+      "Level": "All levels",
+      "Access": "Lifetime",
+      "Format": "Video + audio",
+      "Duration": "2 hours"
+    },
+    "images": [],
+    "display": {
+      "color": [
+        "#b5654a",
+        "#f0b49b"
+      ]
+    },
+    "price_minor": 6700,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 4,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Mindset"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000005",
+    "slug": "growth-course",
+    "type": "course",
+    "title": "Scale It: Growing Beyond Your First Sales",
+    "subtitle": null,
+    "summary": "How we grow revenue per customer once the first sales are in.",
+    "description": [
+      "Replace with course details."
+    ],
+    "included": [
+      "Pricing and offer structure.",
+      "Upsell and repeat-purchase playbook.",
+      "Automation checklists."
+    ],
+    "info": {
+      "Level": "Intermediate",
+      "Access": "Lifetime",
+      "Format": "Video lessons",
+      "Duration": "4 hours"
+    },
+    "images": [],
+    "display": {
+      "color": [
+        "#0b6e4f",
+        "#6fd6b1"
+      ]
+    },
+    "price_minor": 30000,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 5,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Marketing",
+      "Scale"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000006",
+    "slug": "book-one",
+    "type": "book",
+    "title": "The First Book: A Practical Guide",
+    "subtitle": null,
+    "summary": "The book that started it all. Ebook with bonus worksheets.",
+    "description": [
+      "Replace with the book blurb: two or three short paragraphs ending with what the reader will gain."
+    ],
+    "included": [
+      "Ebook (PDF and EPUB), instant download.",
+      "Bonus worksheets.",
+      "Link to the print edition."
+    ],
+    "info": {
+      "Pages": "220",
+      "Access": "Instant download",
+      "Format": "PDF + EPUB"
+    },
+    "images": [],
+    "display": {
+      "badge": "New",
+      "color": [
+        "#7a4b2a",
+        "#d1a06b"
+      ]
+    },
+    "price_minor": 2400,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 6,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Beginner",
+      "Mindset"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000007",
+    "slug": "book-two",
+    "type": "book",
+    "title": "The Second Book: Stories and Lessons",
+    "subtitle": null,
+    "summary": "Short, honest chapters you can read in one sitting.",
+    "description": [
+      "Replace with the book blurb."
+    ],
+    "included": [
+      "Ebook, instant download.",
+      "Reading-group guide."
+    ],
+    "info": {
+      "Pages": "180",
+      "Access": "Instant download",
+      "Format": "PDF + EPUB"
+    },
+    "images": [],
+    "display": {
+      "color": [
+        "#23404f",
+        "#6aa2b8"
+      ]
+    },
+    "price_minor": 1900,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 7,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Mindset"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000008",
+    "slug": "workbook",
+    "type": "template",
+    "title": "The Companion Workbook",
+    "subtitle": null,
+    "summary": "Printable worksheets that go with the course and books.",
+    "description": [
+      "Replace with workbook details."
+    ],
+    "included": [
+      "60+ page printable PDF.",
+      "Fillable fields."
+    ],
+    "info": {
+      "Pages": "64",
+      "Access": "Instant download",
+      "Format": "PDF"
+    },
+    "images": [],
+    "display": {
+      "color": [
+        "#5a3d5c",
+        "#c295c4"
+      ]
+    },
+    "price_minor": 1200,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 8,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Worksheets"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000009",
+    "slug": "planner",
+    "type": "guide",
+    "title": "90-Day Action Planner",
+    "subtitle": null,
+    "summary": "A printable planner to turn goals into weekly actions.",
+    "description": [
+      "Replace with planner details."
+    ],
+    "included": [
+      "Quarterly, monthly and weekly pages.",
+      "Habit and revenue trackers."
+    ],
+    "info": {
+      "Pages": "48",
+      "Access": "Instant download",
+      "Format": "PDF"
+    },
+    "images": [],
+    "display": {
+      "color": [
+        "#c9a24a",
+        "#f2dc9b"
+      ]
+    },
+    "price_minor": 1500,
+    "compare_at_minor": null,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 9,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Worksheets"
+    ],
+    "bundle_contents": []
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000010",
+    "slug": "bundle",
+    "type": "bundle",
+    "title": "The Complete Bundle: Course + Books + Workbook",
+    "subtitle": null,
+    "summary": "Everything in one package at the best price.",
+    "description": [
+      "Replace with bundle details."
+    ],
+    "included": [
+      "The Signature Course.",
+      "The First Book and The Second Book.",
+      "The Companion Workbook."
+    ],
+    "info": {
+      "Level": "All levels",
+      "Access": "Lifetime",
+      "Format": "Video + PDF + EPUB"
+    },
+    "images": [],
+    "display": {
+      "badge": "Save 31%",
+      "color": [
+        "#1f1f1f",
+        "#e50069"
+      ]
+    },
+    "price_minor": 22900,
+    "compare_at_minor": 33400,
+    "currency": "USD",
+    "allow_quantity": false,
+    "sort": 10,
+    "published_at": "2026-10-28T00:00:00+00:00",
+    "categories": [
+      "Marketing"
+    ],
+    "bundle_contents": [
+      "signature-course",
+      "book-one",
+      "book-two",
+      "workbook"
+    ]
+  }
+]
