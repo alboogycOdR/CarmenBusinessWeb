@@ -1,0 +1,82 @@
+{
+  "project": "Carmen Business Web",
+  "subtitle": "Digital product store: courses, e-books, guides, templates and bundles",
+  "repo": "alboogycOdR/CarmenBusinessWeb",
+  "asOf": "2026-10-29",
+  "reportNumber": 1,
+  "preparedFor": "Project owner",
+  "headline": "Customers can now browse, pay with Payfast, and automatically receive their downloads, course links and receipt by email. Staff have a secure admin sign-in with two-step verification. Remaining work is the admin tools (refunds, products, orders, reporting), the client's real content, and the staging and go-live steps.",
+  "milestones": [
+    { "id": "M1", "name": "Foundation", "detail": "Repository, CI, database, security rules", "status": "done" },
+    { "id": "M2", "name": "Store on the database, checkout, polished look", "detail": "Catalogue from DB, Payfast checkout, reference-matched design", "status": "done" },
+    { "id": "M3", "name": "First real sale, paid and delivered", "detail": "Code complete. The live sandbox purchase on staging waits for Payfast sandbox account + staging site (D16)", "status": "code-done" },
+    { "id": "M4", "name": "Admin and operations", "detail": "Admin sign-in done; refunds, products, orders, reporting remain", "status": "in-progress" },
+    { "id": "M5", "name": "Launch", "detail": "Client content, compliance, staging, runbooks, go-live and client sign-off", "status": "not-started" }
+  ],
+  "modules": [
+    { "pr": "0", "name": "Repository foundation and CI", "days": 1, "status": "done", "merged": "2026-10-28", "github": [1],
+      "delivered": "Automated checks on every change (type checks, tests, browser tests, secret scanning), pinned tools, PR template, architecture decision records." },
+    { "pr": "1", "name": "Database, security rules and audit log", "days": 3, "status": "done", "merged": "2026-10-28", "github": [2, 3],
+      "delivered": "All tables, default-deny access rules, integrity rules (orders can't be altered or deleted), append-only audit log; 160+ database tests." },
+    { "pr": "2", "name": "Catalogue from the database, SEO pages", "days": 3, "status": "done", "merged": "2026-10-29", "github": [5],
+      "delivered": "Shop built from the database; a pre-rendered, search-friendly page per product; sitemap; one licence per product." },
+    { "pr": "3", "name": "Payfast checkout (rands) + home page polish", "days": 3.5, "status": "done", "merged": "2026-10-29", "github": [6, 7, 8],
+      "delivered": "Server-priced checkout in ZAR (R1 997.00 format), coupons, R5 minimum, pending orders, honest success page; shop restyled to match the reference site." },
+    { "pr": "4", "name": "Payment confirmation (Payfast ITN)", "days": 3, "status": "done", "merged": "2026-10-29", "github": [9],
+      "delivered": "All four Payfast security checks; an order is marked paid exactly once; forged or repeated notifications can't do harm; safe replay tool." },
+    { "pr": "5", "name": "Secure downloads", "days": 2.5, "status": "done", "merged": "2026-10-29", "github": [10],
+      "delivered": "Private file storage; personal download links valid 7 days / 5 downloads (D5); email-scanner-safe download page; 60-second file links." },
+    { "pr": "6", "name": "Delivery emails", "days": 3, "status": "done", "merged": "2026-10-29", "github": [11],
+      "delivered": "One email per order with receipt, download buttons and course links; honest manual-access wording; retries if the email service is down; owner alerts. Resend Free plan (D9, review D18)." },
+    { "pr": "8", "name": "Admin sign-in and staff roles", "days": 2.5, "status": "done", "merged": "2026-10-29", "github": [12],
+      "delivered": "Admin login with mandatory authenticator app; owner/admin/support roles checked on server and database; staff tool (add, reset, revoke); activity log. Carmen is owner (D10)." },
+    { "pr": "7", "name": "Refunds and chargebacks", "days": 2.5, "status": "remaining", "needs": "Decisions D7 (refund policy) and D15 (API vs dashboard)",
+      "scope": "Refund from the admin through Payfast (or record a dashboard refund), mark disputes, revoke access to refunded items, refund email." },
+    { "pr": "9", "name": "Product management (admin)", "days": 4, "status": "remaining", "needs": "Nothing: can start now",
+      "scope": "Create and edit products, prices, categories, bundles and coupons; upload files; course links and instructions; 'Publish changes' button." },
+    { "pr": "10", "name": "Order management (admin)", "days": 3, "status": "remaining", "needs": "PR 7 for the refund screens",
+      "scope": "Search orders; see payments, deliveries and emails; resend emails; renew or revoke links; confirm manual access; replay failed payments." },
+    { "pr": "11", "name": "Sales reporting and monitoring", "days": 2, "status": "remaining", "needs": "PR 10",
+      "scope": "Sales dashboard (orders, revenue, refunds, top products, VAT/net); automatic health checks that email the owner when something fails." },
+    { "pr": "12", "name": "Content, compliance and final polish", "days": 3, "status": "remaining", "needs": "Carmen's content; decisions D3, D7, D12, D13",
+      "scope": "Real copy, products, photos and legal pages (POPIA); reviews; newsletter consent; accessibility and speed checks; page-by-page design sign-off." },
+    { "pr": "13", "name": "Staging and go-live", "days": 2, "status": "remaining", "needs": "Accounts in Carmen's name; decisions D9 (plans), D16 (Payfast)",
+      "scope": "Staging site with Payfast sandbox and a real test purchase; runbooks, backups and restore test; go-live checklist; Carmen's acceptance testing." }
+  ],
+  "decisions": {
+    "made": [
+      ["D1", "Payfast is the payment gateway"], ["D2", "Rands (ZAR) only"], ["D5", "Download links: 7 days, 5 downloads"],
+      ["D9", "Email: Resend Free plan for launch (review under D18)"], ["D10", "Carmen is the owner; all accounts in her name"],
+      ["D11", "Branches: main, staging, one branch per feature"], ["D14", "Totals under R5.00 are rejected"],
+      ["D17", "Prices shown as R1 997.00"], ["D19", "Emails sent from orders@<Carmen's domain>"]
+    ],
+    "open": [
+      ["D3", "VAT registration and invoices", "Receipt wording, reporting (PR 6 wording, PR 11, PR 12)"],
+      ["D4", "Product details from Carmen: files, course links, prices, photos", "Real catalogue (PR 9, PR 12)"],
+      ["D7", "Refund policy", "Refunds (PR 7), terms page (PR 12)"],
+      ["D8", "Rules for the SAVE10 first-order discount", "Coupons (PR 9)"],
+      ["D9", "Supabase and Netlify plans for production", "Go-live (PR 13)"],
+      ["D12", "Newsletter provider and consent wording", "PR 12"],
+      ["D13", "Real, verifiable reviews (or hide the page)", "PR 12"],
+      ["D15", "Refunds via Payfast API, dashboard, or both (recommended: both)", "PR 7"],
+      ["D16", "Payfast sandbox and live accounts", "Live sandbox test (M3), go-live (PR 13)"],
+      ["D18", "When to upgrade from the Resend Free plan", "Monitor monthly; triggers recorded"]
+    ]
+  },
+  "ownerActions": [
+    "Create the accounts in Carmen's name: Payfast (sandbox + live), Netlify, Supabase, Resend; verify her email domain (docs/email.md).",
+    "GitHub: make main the default branch; add branch protection (1 approval + 4 checks); delete the old feat/* branches; mark GitGuardian incidents 39231395 and 39231396 as false positives.",
+    "Ask Carmen for: logo, product photos, copy, final prices, the actual files and course links, and real reviews.",
+    "Answer the open decisions above (D7 and D15 unlock refunds next)."
+  ],
+  "quality": [
+    ["Database tests (pgTAP)", "319"], ["Unit tests", "60"], ["Integration tests (real database, storage, auth)", "68"],
+    ["Browser (end-to-end) scenarios", "17"], ["Deliberate-break (mutation) checks, all caught", "70+"], ["Secret scanning", "Clean"]
+  ],
+  "notes": [
+    "The cart currently says 'Taxes are calculated at checkout'; prices are tax-inclusive. The wording will be corrected in PR 12 once VAT (D3) is decided.",
+    "All text, prices and product images on the site are placeholders until Carmen's content arrives.",
+    "Nothing has been deployed to a public site yet; a staging site can be set up as soon as Netlify and Supabase accounts exist."
+  ],
+  "changesSinceLast": []
+}
