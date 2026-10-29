@@ -335,14 +335,26 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "create_pending_order":
+            "consume_download":
+{ Args: { "p_token_hash": string }; Returns: Json
+                           },
+"create_pending_order":
 { Args: { "p_access_key_hash": string,"p_coupon_code": string,"p_email": string,"p_expected_total": number,"p_items": Json,"p_livemode": boolean,"p_marketing_opt_in": boolean,"p_terms_accepted": boolean }; Returns: Json
+                           },
+"download_policy":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"download_token_status":
+{ Args: { "p_token_hash": string }; Returns: Json
                            },
 "expire_stale_orders":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "get_order_status":
 { Args: { "p_access_key_hash": string,"p_reference": string }; Returns: Json
+                           },
+"issue_delivery_tokens":
+{ Args: { "p_order_id": string,"p_replace"?: boolean }; Returns: Json
                            },
 "payfast_minimum_minor":
 { Args: Record<PropertyKey, never>; Returns: number

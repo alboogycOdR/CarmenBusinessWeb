@@ -260,7 +260,7 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 | ~~D2~~ | ~~Store currency~~ | **Decided 28 Oct 2026: ZAR (rands) only.** | ✓ |
 | D3 | VAT registration and whether prices are tax-inclusive. Invoice requirements. | Tax-inclusive prices, `tax_minor` recorded, a receipt email with the VAT number if registered. | PR 6 (receipt), PR 11 (metrics) |
 | **D4** | Per product: file, external link or both. Instant or manual external access, with realistic manual timing. | Capture in a product intake sheet. | **PR 5–6** test data; PR 12 content |
-| D5 | Download expiry and limits. | Link valid 7 days, 5 downloads, renewable by admin. | PR 5 |
+| D5 | Download expiry and limits. | **Decided (owner, 29 Oct 2026):** link valid 7 days, 5 downloads, renewable by admin. | PR 5 |
 | D6 | Any multi-seat products? | No (quantity = 1). | PR 2, PR 3 |
 | D7 | Refund policy and SLA, support email, support hours. | Needed for the email templates and terms. | PR 6, PR 12 |
 | D8 | First-order discount rules (SAVE10): one per email? Keep advertising it publicly? | One redemption per email, server-enforced. Remove from the announcement bar or accept the leakage. | PR 3 |

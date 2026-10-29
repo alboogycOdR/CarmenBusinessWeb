@@ -145,3 +145,19 @@ flowchart TD
 
 The admin "Replay" button (PR 10) will call the same code.
 
+## 9. Secure downloads (PR 5)
+
+Files live in the **private** Storage bucket `product-files`. There are no storage policies for it, so only the service role can read it: anon and signed-in users get nothing (tested).
+
+| Function (service role only) | What it does |
+|---|---|
+| `issue_delivery_tokens(order, replace)` | For a paid order, one new token per file fulfilment: 32 random bytes, returned once as base64url, stored only as SHA-256. Valid 7 days, 5 downloads (`download_policy()`, D5). `replace` revokes earlier links. |
+| `download_token_status(hash)` | `ok`, `unknown`, `unpaid`, `revoked`, `expired` or `used_up`, with the label, downloads left and expiry. No side effects. |
+| `consume_download(hash)` | Counts one download in a single conditional UPDATE. The conditions are re-checked under the row lock, so concurrent requests never exceed the limit (12 parallel requests → exactly 5). |
+
+The download flow is `/api/download?t=…`:
+1. **GET** shows a landing page and uses nothing.
+2. **Download (POST)** signs a 60-second URL, then counts the download, then answers 303 to the file.
+
+A denial is a plain page with the reason and a link to the contact page. Before PR 6 sends links by email, support issues them with `node scripts/issue-download-links.mts <reference> [--replace]`.
+

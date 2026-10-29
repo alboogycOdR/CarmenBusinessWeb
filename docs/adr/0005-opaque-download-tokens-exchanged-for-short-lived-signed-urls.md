@@ -11,3 +11,8 @@ Emails carry `/api/download/<token>`. Only a SHA-256 hash of the token is stored
 
 ## Consequences
 Permanent storage URLs never appear in HTML, JS or email. Downloads can be counted and revoked.
+
+## Amendment (PR 5, 29 October 2026)
+- **Links are `/api/download?t=<token>`.** Opening a link (GET) shows a landing page and uses nothing. Pressing **Download** (POST) counts one download atomically and answers **303** with the 60-second signed URL. This is because email security scanners open every link, and would otherwise use up downloads.
+- **D5:** 7 days and 5 downloads. The signed URL is created before the download is counted, so a storage error never costs the buyer a download.
+

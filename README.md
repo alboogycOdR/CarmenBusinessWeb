@@ -18,6 +18,7 @@ A fast static storefront for selling **courses, books, guides, templates and bun
 > - **Confirmation:** an order becomes paid **only** through Payfast's notification at `/api/payfast/itn`, after all four checks Payfast requires: signature, Payfast's server IPs, merchant and exact amount, and Payfast's own `VALID` confirmation. One transaction marks it paid, creates its deliveries and queues the email. Repeated notifications change nothing.
 > - **Success page:** says "paid" only when the server does, and lists what each item delivers.
 > - **Failed notifications** are stored and can be re-processed safely with `node scripts/replay-event.mts <event id>` ([`docs/database.md`](docs/database.md) §8).
+> - **Downloads:** files sit in a private storage bucket. A buyer's link (`/api/download?t=…`) works for 7 days and 5 downloads. It opens a page with a Download button, which hands out a 60-second signed URL. Until delivery emails arrive (PR 6), support can issue links with `node scripts/issue-download-links.mts <reference>` ([`docs/database.md`](docs/database.md) §9).
 > - **Netlify environment:** `PAYFAST_MODE`, `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, `SITE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (see `.env.example`).
 
 ## 1. Edit content and products
@@ -85,8 +86,9 @@ assets/js/render.js        HTML templates shared by the browser and the build
 assets/js/main.js          page behaviour + interactions
 scripts/build.mts          database → dist/ (catalog.js, product pages, sitemap, robots)
 scripts/replay-event.mts   re-process a stored Payfast notification (safe to repeat)
-netlify/functions/         checkout, payfast-itn, order-status, expire-orders (scheduled)
-netlify/lib/               Payfast signing + ITN checks, config, database RPC, HTTP helpers
+scripts/issue-download-links.mts  issue download links for a paid order (support, until PR 6)
+netlify/functions/         checkout, payfast-itn, order-status, download, expire-orders (scheduled)
+netlify/lib/               Payfast signing + ITN checks, storage signing, config, database RPC, HTTP helpers
 tests/                     unit (site, build, repo), build output, database API, e2e; fixtures/
 supabase/                  config, migrations, seed, pgTAP tests, rollback scripts
 types/database.ts          generated DB types
