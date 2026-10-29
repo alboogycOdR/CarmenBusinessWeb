@@ -23,6 +23,8 @@ Re-brand by editing the `:root` tokens at the top of `assets/css/styles.css` (`-
 
 ## 2. Take payments
 
+> **Direction change (ADR-0009):** the store will take payments through **Payfast in rands (ZAR)**. The Stripe prototype described below is the *current* code only, and PR 3 replaces it with a Payfast checkout backed by the order database. **Do not configure live Stripe keys.** See [`docs/01-architecture-review.md`](docs/01-architecture-review.md) §3.1–3.2.
+
 Pick one (or combine):
 
 **A. Cart checkout with Stripe (recommended).** Deploy to Netlify, set two environment variables, and point the site at the function:

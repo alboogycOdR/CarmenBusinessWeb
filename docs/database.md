@@ -105,6 +105,6 @@ The seed (`supabase/seed.sql`) is **local/CI only**. It mirrors the storefront's
 ## 7. Decisions and deviations recorded in PR 1
 
 - **No staff account in the seed** (the backlog said "one admin profile"). Tests create their own users, and real staff are granted only by an owner-run script (PR 8). This avoids committing a usable password.
-- **Seed currency is USD** to match today's storefront. Real currency follows decision D2.
+- **Seed currency is USD** to match today's storefront. **D2 is now decided (ZAR, ADR-0009):** PR 3 migrates the catalogue and seed to rands, adds `payfast` to `payment_provider`, and adds ZAR-only constraints.
 - **`[auth.email] enable_signup` must stay `true`.** In GoTrue it toggles the email/password provider itself. Setting it to `false` silently blocks staff sign-in, which the API test caught during development. Public sign-up is blocked by `[auth] enable_signup = false`.
 - `product_type` adds `guide` and `template` beside `course`, `book` and `bundle`, per spec §1 ("courses, e-books, guides, templates and bundles").

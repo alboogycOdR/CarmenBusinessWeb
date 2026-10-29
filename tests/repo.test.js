@@ -17,7 +17,7 @@ test(".env.example documents variables without leaking values", () => {
   assert.ok(vars.length >= 10, "expected the documented variable list");
   for (const line of vars) {
     const [key, value] = [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)];
-    if (/KEY|SECRET|TOKEN|PASSWORD|HOOK/.test(key)) assert.strictEqual(value, "", `${key} must be blank in .env.example`);
+    if (/KEY|SECRET|TOKEN|PASS|HOOK/.test(key)) assert.strictEqual(value, "", `${key} must be blank in .env.example`);
     else assert.ok(value === "" || /^\d+$/.test(value), `${key} may only carry a numeric default`);
   }
 });
