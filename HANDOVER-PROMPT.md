@@ -33,12 +33,10 @@ You are continuing an in-progress project. Before you change anything, read this
 - #3 GitGuardian false-positive fix.
 - #4 Payfast/ZAR decision docs (ADR-0009).
 
-**Open, stacked (merge in this order):**
-1. **#5 PR 2**, `feat/02-catalogue-from-db` → `main`. Storefront built from the database, pre-rendered product pages, sitemap, single-licence cart. CI was green.
-2. **#6 PR 3**, `feat/03-payfast-checkout` → `feat/02…`. Payfast checkout: `create_pending_order()` SQL, `/api/checkout`, `/api/order-status`, scheduled expiry, ZAR prices formatted `R1 997.00`, and an honest success page. Also fixed a latent PR 1 grant bug. Check its CI.
-3. **#7 UI polish**, `feat/home-polish` → `feat/03…`. Shop look matched to the reference: SVG device mockups, measured typography and buttons, price slider, 2-column mobile grid. **Must be squash-merged**, because an intermediate commit briefly contained a third-party screenshot. Check its CI.
+- #5 PR 2: storefront built from the database, pre-rendered product pages, sitemap.
 
-After each merge, retarget the next PR to `main`.
+**Open:**
+- **#8**, `feat/03-to-main` → `main`: PR 3 (Payfast checkout: `create_pending_order()`, `/api/checkout`, `/api/order-status`, scheduled expiry, `R1 997.00` prices, honest success page) plus the UI polish (#7, squashed). #6 and #7 were accidentally merged into their stacked branches instead of `main`; #8 lands the identical tree on `main` without the commit that briefly held a reference-site screenshot. After it merges, delete `feat/02-catalogue-from-db`, `feat/03-payfast-checkout` and `feat/home-polish`. **Lesson:** when stacking PRs, retarget the next PR to `main` *before* its parent merges, or the owner may merge it into the stale base.
 
 **Remaining backlog** (details in `docs/02-implementation-backlog.md`). Order: PR 4 → 5 → 6 → 8 → 7 → 9 → 10 → 11 → 12 → 13.
 - **PR 4:** Payfast ITN function (4 checks, dedupe `pf_payment_id:payment_status`) and `confirm_payment()` SQL (creates fulfilments, tokens and the outbox row idempotently), plus a replay tool. Extends `order-status` with items. **Needs D16** (Payfast sandbox account and a staging URL) for the real sandbox run; the fixture-based tests can be built without it.
@@ -54,7 +52,7 @@ After each merge, retarget the next PR to `main`.
 
 **Milestones:**
 - **M1 Foundation:** done.
-- **M2 Store on the database, with checkout and the polished look:** in review (#5–#7).
+- **M2 Store on the database, with checkout and the polished look:** PR 2 merged; PR 3 + polish in review (#8).
 - **M3 First real sale, paid and delivered:** PR 4–6, plus a sandbox purchase on staging.
 - **M4 Admin and operations:** PR 8, 7, 9, 10, 11.
 - **M5 Launch:** PR 12–13, the client's content and the owner's sign-off.
@@ -118,6 +116,6 @@ After each merge, retarget the next PR to `main`.
 - **Writing files:** never write a raw U+2028 character into source code; use escape sequences.
 
 ## 8. First steps in the new session
-1. `git fetch`, then check the state of #5, #6 and #7: CI, review comments, merged or not.
+1. `git fetch`, then check the state of #8: CI, review comments, merged or not.
 2. Report the status back to the owner in plain language.
 3. Ask which to do next. The recommendation is to finish the merges, then PR 4 (ITN). If the owner prioritises the look, do the design pass on the remaining pages, or add real assets once Carmen supplies them.
