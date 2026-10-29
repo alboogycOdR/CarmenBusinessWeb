@@ -83,3 +83,42 @@ export function loadItnConfig(env: Env): ItnConfig {
   if (problems.length || !db) throw new ConfigError(problems.join("; "));
   return { ...db, mode: mode as PayfastMode, merchantId, passphrase };
 }
+
+export interface EmailConfig extends DbConfig {
+  resendApiKey: string;
+  from: string;
+  replyTo: string | null;
+  alertTo: string | null;
+  siteUrl: string;
+  brand: string;
+  vatNumber: string | null;
+}
+
+const ADDRESS = /^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$/;
+
+/* The outbox worker's settings. EMAIL_FROM is "Name <orders@domain>" or a bare
+ * address on a domain verified in Resend. Optional: EMAIL_REPLY_TO (where buyer
+ * replies go), ALERT_EMAIL_TO (failed-email alerts), VAT_NUMBER (D3). */
+export function loadEmailConfig(env: Env): EmailConfig {
+  const problems: string[] = [];
+  let db: DbConfig | null = null;
+  try { db = loadDbConfig(env); } catch (e) { problems.push((e as Error).message); }
+  const resendApiKey = required(env, "RESEND_API_KEY", problems);
+  const from = required(env, "EMAIL_FROM", problems);
+  const siteUrl = required(env, "SITE_URL", problems).replace(/\/+$/, "");
+  if (from && !(ADDRESS.test(from) || /^[^<>]{1,80}<[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>$/.test(from))) problems.push("EMAIL_FROM must be an address or 'Name <address>'");
+  const opt = (name: string) => {
+    const v = (env[name] ?? "").trim();
+    if (v && !ADDRESS.test(v)) problems.push(`${name} must be an email address`);
+    return v || null;
+  };
+  const replyTo = opt("EMAIL_REPLY_TO");
+  const alertTo = opt("ALERT_EMAIL_TO");
+  if (siteUrl && !/^https?:\/\/[^\s/]+$/.test(siteUrl)) problems.push("SITE_URL must be an origin");
+  if (problems.length || !db) throw new ConfigError(problems.join("; "));
+  return {
+    ...db, resendApiKey, from, replyTo, alertTo, siteUrl,
+    brand: (env.STORE_NAME ?? "").trim() || "Carmen",
+    vatNumber: (env.VAT_NUMBER ?? "").trim() || null,
+  };
+}

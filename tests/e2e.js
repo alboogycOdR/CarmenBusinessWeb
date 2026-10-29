@@ -54,6 +54,7 @@ const CONFIG = fs.readFileSync(path.join(root, "assets/js/site-config.js"), "utf
 const errors = [];
 let base;
 let itnHandler;
+const outbox = []; // emails the ITN handed to (fake) Resend
 const pfIds = new Map(); // one Payfast transaction id per order, reused when an ITN is repeated
 
 async function newPage(browser, vp, patch) {
@@ -220,9 +221,12 @@ async function cartFlow(browser) {
     headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/pdf", "x-upsert": "true" },
   });
   assert.ok(up.ok, "fixture upload");
-  const { issueDownloadLinks } = await import("../scripts/issue-download-links.mts");
-  const { links } = await issueDownloadLinks({ supabaseUrl: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }, base, paid.m_payment_id);
-  assert.strictEqual(links.length, 1);
+  // The delivery email was sent the moment the ITN confirmed payment (Resend recorded, not called).
+  const mail = outbox.filter((m) => m.to === paid.email_address);
+  assert.strictEqual(mail.length, 1, "one delivery email");
+  assert.match(mail[0].subject, new RegExp(`order ${paid.m_payment_id}: receipt and access`));
+  const links = [...mail[0].html.matchAll(/href="([^"]*\/api\/download\?t=[^"]+)"/g)].map((m) => ({ url: m[1].replace(/&#38;/g, "&") }));
+  assert.strictEqual(links.length, 1, "the email links the workbook");
   await p2.goto(links[0].url);
   assert.match(await txt(p2, "h1"), /Companion Workbook \(PDF\)/);
   assert.match(await txt(p2, "main"), /5 of 5 downloads left/);
@@ -233,7 +237,7 @@ async function cartFlow(browser) {
   assert.match(await txt(p2, "main"), /4 of 5 downloads left/);
   await p2.goto(base + "/api/download?t=" + "x".repeat(43));
   assert.match(await txt(p2, "h1"), /isn't valid/);
-  step("download link: landing page, Download button, the private file, count shown");
+  step("delivery email → its download link → landing page → the private file");
 
   // A code only the server knows (FIXED20, R20 off) is applied at checkout.
   await p2.goto(base + "/"); await p2.locator('[data-add="workbook"]').click(); await p2.goto(base + "/cart.html");
@@ -424,7 +428,9 @@ async function admin(pathAndQuery, init = {}) {
   api["/api/checkout"] = (await import("../netlify/functions/checkout.mts")).default;
   api["/api/order-status"] = (await import("../netlify/functions/order-status.mts")).default;
   const { createItnHandler } = await import("../netlify/functions/payfast-itn.mts");
-  itnHandler = createItnHandler({ resolveHost: async () => [], validate: async () => "VALID" });
+  itnHandler = createItnHandler({ resolveHost: async () => [], validate: async () => "VALID" },
+    { ...process.env, RESEND_API_KEY: "re_e2e_not_real", EMAIL_FROM: "Carmen <orders@example.com>" },
+    { send: async (m) => { outbox.push(m); return { id: "re_e2e_" + outbox.length }; } });
   api["/api/download"] = (await import("../netlify/functions/download.mts")).default;
   const browser = await chromium.launch();
   const shots = process.env.SHOTS;

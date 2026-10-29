@@ -335,7 +335,13 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "consume_download":
+            "claim_due_emails":
+{ Args: { "p_limit": number,"p_order_id"?: string,"p_reference"?: string }; Returns: Json
+                           },
+"complete_email":
+{ Args: { "p_email_id": string,"p_provider_message_id": string }; Returns: undefined
+                           },
+"consume_download":
 { Args: { "p_token_hash": string }; Returns: Json
                            },
 "create_pending_order":
@@ -347,11 +353,20 @@ isOneToOne: false
 "download_token_status":
 { Args: { "p_token_hash": string }; Returns: Json
                            },
+"email_context":
+{ Args: { "p_email_id": string }; Returns: Json
+                           },
 "expire_stale_orders":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"fail_email":
+{ Args: { "p_alert_to"?: string,"p_email_id": string,"p_error": string,"p_permanent": boolean,"p_retry_after_seconds"?: number }; Returns: Json
+                           },
 "get_order_status":
 { Args: { "p_access_key_hash": string,"p_reference": string }; Returns: Json
+                           },
+"grant_manual_access":
+{ Args: { "p_fulfilment_id": string }; Returns: Json
                            },
 "issue_delivery_tokens":
 { Args: { "p_order_id": string,"p_replace"?: boolean }; Returns: Json
