@@ -41,9 +41,11 @@ You are continuing an in-progress project. Before you change anything, read this
 - #10 PR 5: private `product-files` bucket, download tokens (D5: 7 days, 5 downloads), `/api/download` (GET landing page, POST counts + 303 to a 60 s signed URL), `scripts/issue-download-links.mts`.
 - #11 PR 6: email outbox + Resend (D9 Free plan, D18 revisit, D19 `orders@<client domain>`), one combined order email, inline send from the ITN + scheduled worker, `scripts/grant-manual-access.mts`, `scripts/preview-email.mts`, `docs/email.md`.
 
-**Open:** nothing. **Owner to delete** stale branches `feat/02-catalogue-from-db`, `feat/03-payfast-checkout`, `feat/home-polish`, `feat/03-to-main`, `feat/04-payfast-itn`, `feat/05-secure-downloads`, `feat/06-email-delivery` (the session's git proxy refuses branch deletion with 403).
+- #12 PR 8: admin sign-in at `/admin/` (mandatory TOTP, `requireStaff()` validates tokens with Supabase Auth + aal2 + fresh role; strict CSP via generated `_headers`), `record_admin_action()` audit, `scripts/grant-admin.mts` (grant/--reset/--revoke), `docs/admin.md`. D10: Carmen is owner, all accounts in her name.
 
-**Remaining backlog** (details in `docs/02-implementation-backlog.md`). Order: PR 8 → 7 → 9 → 10 → 11 → 12 → 13 (PRs 4–6 merged). **Next: PR 8 admin auth (needs D10: admin users, account ownership).**
+**Open:** nothing. **Owner to delete** stale branches `feat/02-catalogue-from-db`, `feat/03-payfast-checkout`, `feat/home-polish`, `feat/03-to-main`, `feat/04-payfast-itn`, `feat/05-secure-downloads`, `feat/06-email-delivery`, `feat/08-admin-auth` (the session's git proxy refuses branch deletion with 403).
+
+**Remaining backlog** (details in `docs/02-implementation-backlog.md`). Order: PR 7 → 9 → 10 → 11 → 12 → 13 (PRs 4–6 and 8 merged). **Next: PR 7 refunds (needs D7 refund policy, D15 API vs dashboard; recommendation: both) or PR 9 admin catalogue (no new decisions).**
 - **PR 4:** Payfast ITN function (4 checks, dedupe `pf_payment_id:payment_status`) and `confirm_payment()` SQL (creates fulfilments, tokens and the outbox row idempotently), plus a replay tool. Extends `order-status` with items. **Needs D16** (Payfast sandbox account and a staging URL) for the real sandbox run; the fixture-based tests can be built without it.
 - **PR 5:** private storage bucket, delivery tokens, `/api/download`.
 - **PR 6:** Resend outbox, email templates, external and manual-access delivery, mixed delivery.
@@ -59,7 +61,7 @@ You are continuing an in-progress project. Before you change anything, read this
 - **M1 Foundation:** done.
 - **M2 Store on the database, with checkout and the polished look:** done (PRs 2–3 + polish merged).
 - **M3 First real sale, paid and delivered:** code complete (PRs 4–6 merged); the sandbox purchase on staging waits for D16 + a staging site.
-- **M4 Admin and operations:** PR 8, 7, 9, 10, 11.
+- **M4 Admin and operations:** PR 8 done; PR 7, 9, 10, 11 remain.
 - **M5 Launch:** PR 12–13, the client's content and the owner's sign-off.
 
 ## 4. Decisions
