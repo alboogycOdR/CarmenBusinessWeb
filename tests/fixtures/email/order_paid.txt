@@ -1,0 +1,36 @@
+Subject: Your Carmen order CBW-7K2M9QX4TB: receipt and access
+
+Thank you for your order
+
+Your payment for order CBW-7K2M9QX4TB was received. Here's how to access everything you bought.
+
+THE SIGNATURE COURSE: YOUR COMPLETE PROGRAMME
+- Course access: https://courses.example.com/signature
+  Sign in with the email you used at checkout.
+- Download Signature workbook (PDF): https://shop.example.com/api/download?t=SAMPLE-f2
+
+LIVE MASTERCLASS REPLAY WITH Q&A
+- Masterclass replay access: we set this up for you by hand, within 1 business day. We'll email you as soon as it's ready; there's nothing you need to do.
+  We add you to the replay group by hand.
+
+THE FIRST BOOK
+- Download The First Book (PDF): https://shop.example.com/api/download?t=SAMPLE-f4
+- Download The First Book (EPUB): https://shop.example.com/api/download?t=SAMPLE-f5
+
+Download links work until 5 November 2026, for up to 5 downloads each. Save the files somewhere safe. If a link stops working, contact us and we'll send a new one.
+
+RECEIPT
+The Signature Course: Your Complete Programme: R1 997.00
+Live Masterclass Replay with Q&A: R797.00
+The First Book: R249.00
+Subtotal: R2 996.00
+Discount (SAVE10): -R299.60
+Total paid: R2 696.40
+
+Order reference: CBW-7K2M9QX4TB
+Paid on 29 October 2026 via Payfast (transaction 1089250)
+
+Questions, or trouble accessing anything? Reply to this email or contact us at https://shop.example.com/contact.html.
+
+Carmen · https://shop.example.com
+You're receiving this email because of a purchase from Carmen. It contains no marketing.

@@ -233,6 +233,15 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 **Acceptance:** J3, J4, J5, spec §7 "Mixed delivery" and "Email outage".
 
+**As built (PR 6):**
+- **D9:** the Resend Free plan, with a revisit decision (**D18**: 3,000 a month and 100 a day; upgrade triggers recorded). **D19:** the sender is `orders@<client's domain>`. Setup, DNS and operations are in [`email.md`](email.md).
+- **One `order_paid` email carries the receipt and every delivery** (downloads, course links and instructions, truthful manual-access timing), instead of separate "receipt" and "delivery" emails. Templates are built: `order_paid`, `manual_access_ready`, `admin_alert`. The *refund* email arrives with PR 7. A *support* email has no trigger yet and arrives with PR 10.
+- **Manual access is granted by staff** with `scripts/grant-manual-access.mts` (`grant_manual_access()`), which queues `manual_access_ready`. PR 10 puts this in the admin.
+- **The ITN sends the email inline** when within its time budget. The scheduled worker runs every 2 minutes (not every minute), to stay light on the free tiers.
+- **Retries never revoke links** issued by an earlier attempt (see ADR-0004 amendment).
+- **The receipt shows a VAT number only if `VAT_NUMBER` is set.** VAT amounts wait for D3.
+- **`scripts/preview-email.mts`** renders every email with sample data for client sign-off. Text bodies are pinned by snapshot tests.
+
 ### PR 7: Admin-initiated refunds, chargebacks, cancellations
 *Payfast sends no refund or chargeback notifications (ADR-0009), so these are admin actions. Depends on PR 8 (admin auth).*
 

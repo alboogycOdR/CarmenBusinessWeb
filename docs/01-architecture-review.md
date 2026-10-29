@@ -264,7 +264,7 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 | D6 | Any multi-seat products? | No (quantity = 1). | PR 2, PR 3 |
 | D7 | Refund policy and SLA, support email, support hours. | Needed for the email templates and terms. | PR 6, PR 12 |
 | D8 | First-order discount rules (SAVE10): one per email? Keep advertising it publicly? | One redemption per email, server-enforced. Remove from the announcement bar or accept the leakage. | PR 3 |
-| **D9** | **Approval of paid services**: Supabase plan for production (pausing and backups), Resend plan, Netlify plan (rate limiting), domain. | Supabase Pro for prod; free tiers for staging. | **PR 1 (staging can start free)**, PR 13 |
+| **D9** | **Approval of paid services**: Supabase plan for production (pausing and backups), Resend plan, Netlify plan (rate limiting), domain. | Supabase Pro for prod; free tiers for staging. **Resend decided 29 Oct 2026: the Free plan for launch**, to be revisited (D18). Supabase and Netlify plans are still open. | **PR 1 (staging can start free)**, PR 6, PR 13 |
 | D10 | Who owns the merchant, hosting, DNS and email accounts (the spec says the client). Who are the admin users, and who signs off the launch. | Client-owned accounts; developer invited with least privilege. | PR 8, PR 13 |
 | **D11** | **Branching / PR base.** The repo's only branch is `claude/trusting-franklin-l4z0a1`, and it is the default. | Create a protected `main` from the current head, plus a `staging` branch tied to a Netlify staging context, with one feature branch per PR. **I need approval to create these branches** (my current permission is to push to the one designated branch only). | **PR 0** |
 | D12 | Newsletter provider and consent wording. Does the popup discount require newsletter opt-in? | Separate, unticked opt-in at checkout. The popup is an explicit opt-in with a consent line. | PR 3, PR 12 |
@@ -273,23 +273,5 @@ All money is stored as `bigint` minor units with an explicit `currency char(3)`.
 | D15 | Refund operations: may admins trigger card refunds via the Payfast API from our admin, or should all refunds happen in the Payfast dashboard and then be recorded in ours? | Both: API refunds where Payfast reports `REFUNDABLE` by card; dashboard plus "record refund" for bank-payout cases. | PR 7, PR 10 |
 | **D16** | **Payfast accounts:** a live merchant account (registered business, passphrase set) owned by the client, and a **sandbox account** for staging. | Client creates both. The developer gets sandbox credentials only. | **PR 4** (sandbox end-to-end), PR 13 |
 | ~~D17~~ | ~~Rand display format~~ | **Decided 29 Oct 2026: `R1 997.00`** (no-break space between thousands, point decimals) in the cart, emails and receipts. | ✓ (PR 3) |
-
----
-
-## 7. Assumptions
-
-- **A1.** No customer accounts. Guests are identified by email and order reference only (spec §1).
-- **A2.** The catalogue stays small (tens of products), so pre-rendering on publish is cheap.
-- **A3.** External course platforms are not integrated via API in the MVP (spec §9). Access is a link plus instructions, or manual.
-- **A4.** All provider integration details will be re-validated against current provider documentation at the start of PR 3, as the spec requires.
-- **A5.** No deployment, merge, paid service or live payment setting will be changed without explicit approval. The work targets local, CI and **staging (test mode) only**.
-
-## 8. Sources consulted for provider assumptions
-
-- **Payfast (decision D1)**, read from the official developer docs on 28 Oct 2026 and to be re-validated at the start of PR 3 (A4). Sources: [custom integration and ITN](https://developers.payfast.co.za/docs) (form fields, signature rules, the four ITN checks, the `/eng/query/validate` endpoint, valid hosts, retries, sandbox behaviour, R5.00 minimum) and the [API reference](https://developers.payfast.co.za/api) (API signature, `?testing=true`, Refunds API query and create, amounts in cents, bank-payout fields).
-
-*Superseded by D1, kept for the record:*
-
-- Stripe availability in South Africa ("extended network" via Paystack), from secondary sources; **must be confirmed with Stripe directly**: [dodopayments.com](https://dodopayments.com/blogs/stripe-supported-countries-alternatives), [thecondia.com](https://thecondia.com/stripe-africa-payments-tax-2025/), [skydo.com](https://www.skydo.com/people-ask/how-to-use-stripe-in-south-africa)
-- Paystack webhook signing (HMAC-SHA512 of the raw body with the secret key; retry schedule): [hookdeck.com guide](https://hookdeck.com/webhooks/platforms/guide-to-paystack-webhooks-features-and-best-practices)
-- Netlify function rate limiting (`config.rateLimit`; not configurable in `netlify.toml` for functions): [docs.netlify.com](https://docs.netlify.com/manage/security/secure-access-to-sites/rate-limiting/)
+| **D18** | **Revisit the Resend plan** (owner request, 29 Oct 2026). The Free plan allows **3,000 emails a month and 100 a day**, 3 sending domains and 30 days of logs. The API limit (10 requests a second) is the same on every plan. A day over 100 emails returns `429 daily_quota_exceeded`: the outbox keeps those emails queued and sends them after the quota resets, so nothing is lost, but delivery is late. Each order uses 1 email, plus 1 per manual-access item and 1 per alert. | **Move to Pro ($20 a month, 50,000 a month, no daily cap) when any of these happen:** a launch or promotion is expected to exceed about **60 orders on a single day**; monthly volume passes about **2,000 emails**; the Resend dashboard or the logs show a `daily_quota_exceeded`; or longer log retention is needed. Check the Resend usage page monthly until then. | PR 11 (alert on quota), PR 13 (go-live review) |
+| ~~D19~~ | ~~Sender address~~ | **Decided 29 Oct 2026:** `orders@<client's domain>`, set as `EMAIL_FROM="Carmen <orders@…>"`. The domain must be verified in Resend (DNS records in [`email.md`](email.md)). Buyer replies go to `EMAIL_REPLY_TO` (the client's support inbox). | PR 6, PR 13 |

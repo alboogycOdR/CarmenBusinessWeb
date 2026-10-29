@@ -1,0 +1,7 @@
+Subject: [Carmen] Email to a buyer failed for order CBW-7K2M9QX4TB
+
+An email to a buyer could not be delivered and will not be retried.
+Order: CBW-7K2M9QX4TB
+Email: order_paid to buyer@example.com after 10 attempts
+Last error: resend 422 validation_error: Invalid `to` field
+Next step: check the buyer's address and the Resend dashboard (resend.com/emails), then contact the buyer with their access details.

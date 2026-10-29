@@ -46,9 +46,10 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('service_role', p.oid, 'EXECUTE')),
-  array['consume_download', 'create_pending_order', 'download_policy', 'download_token_status', 'expire_stale_orders', 'get_order_status',
-        'issue_delivery_tokens', 'payfast_minimum_minor', 'process_payfast_itn'],
-  'the server RPC surface is exactly the checkout, payment-confirmation and download functions');
+  array['claim_due_emails', 'complete_email', 'consume_download', 'create_pending_order', 'download_policy', 'download_token_status',
+        'email_context', 'expire_stale_orders', 'fail_email', 'get_order_status', 'grant_manual_access', 'issue_delivery_tokens',
+        'payfast_minimum_minor', 'process_payfast_itn'],
+  'the server RPC surface is exactly the checkout, payment, download and email functions');
 
 -- ---------- ZAR only (ADR-0009) ------------------------------------------
 select throws_ok($$ insert into public.products (slug, type, title, price_minor, currency) values ('usd', 'book', 'x', 100, 'USD') $$, '23514', null, 'products must be priced in ZAR');

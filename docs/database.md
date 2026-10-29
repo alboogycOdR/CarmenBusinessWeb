@@ -159,5 +159,19 @@ The download flow is `/api/download?t=…`:
 1. **GET** shows a landing page and uses nothing.
 2. **Download (POST)** signs a 60-second URL, then counts the download, then answers 303 to the file.
 
-A denial is a plain page with the reason and a link to the contact page. Before PR 6 sends links by email, support issues them with `node scripts/issue-download-links.mts <reference> [--replace]`.
+A denial is a plain page with the reason and a link to the contact page. The order email (§10) carries the links. Support can issue fresh ones with `node scripts/issue-download-links.mts <reference> [--replace]`.
+
+## 10. Email outbox (PR 6)
+
+`email_events` is the outbox (ADR-0004). `confirm_payment()` queues `order_paid` in the payment's own transaction.
+
+| Function (service role only) | What it does |
+|---|---|
+| `claim_due_emails(limit, order?, reference?)` | Leases due rows (`FOR UPDATE SKIP LOCKED`, 5 minutes) and counts an attempt. Overlapping workers never take the same email. |
+| `email_context(id)` | The order, its items and each delivery (file, link and instructions, manual timing), or the failed email for an alert. |
+| `complete_email(id, provider_id)` | Marks the email sent, and the order's instant deliveries `delivered`. Manual access stays `action_required`. Idempotent. |
+| `fail_email(id, error, permanent, alert_to, retry_after)` | Retries after 1, 2, 4 … minutes (or `Retry-After`). If the failure is permanent or after 10 attempts: `failed`, plus one `admin_alert`, never an alert about an alert. |
+| `grant_manual_access(fulfilment)` | Staff confirm hand-granted access: the delivery becomes `delivered` and `manual_access_ready` is queued once. |
+
+Setup, limits and troubleshooting: [`email.md`](email.md).
 

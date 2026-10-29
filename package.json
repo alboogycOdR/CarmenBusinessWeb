@@ -10,7 +10,7 @@
     "start": "npm run build && python3 -m http.server 8080 -d dist",
     "build": "node scripts/build.mts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test tests/site.test.js tests/build.test.mts tests/payfast.test.mts tests/repo.test.js",
+    "test": "node --test tests/site.test.js tests/build.test.mts tests/payfast.test.mts tests/email.test.mts tests/repo.test.js",
     "test:build": "node --test tests/build.output.test.js",
     "test:e2e": "node tests/e2e.js",
     "db:start": "supabase start -x studio,realtime,edge-runtime,logflare,vector,imgproxy,supavisor,mailpit,postgres-meta",
@@ -18,7 +18,7 @@
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local --schema public > types/database.ts",
     "db:lint": "supabase db lint --level warning --fail-on warning",
-    "test:db": "npm run db:lint && supabase test db && node --test tests/db.api.test.js tests/functions.test.mts tests/itn.test.mts tests/download.test.mts",
+    "test:db": "npm run db:lint && supabase test db && node --test tests/db.api.test.js tests/functions.test.mts tests/itn.test.mts tests/download.test.mts tests/outbox.test.mts",
     "check": "npm run typecheck && npm test && npm run test:db && npm run build && npm run test:build && npm run test:e2e"
   },
   "devDependencies": {
