@@ -109,6 +109,15 @@ async function shopFlow(browser) {
   assert.deepStrictEqual(books, [...books].sort((a, b) => b - a), "sorted desc");
   await page.fill("#f-q", "zzz"); await page.press("#f-q", "Enter");
   assert.match(await txt(page, "#results"), /No products match/);
+  // Dual-handle price slider drives the same filter as the number inputs.
+  await page.click("[data-reset]");
+  await page.locator("#r-min").fill("1000");
+  assert.strictEqual(await page.locator("#f-min").inputValue(), "1000", "slider writes the min input");
+  assert.ok((await page.locator(".card .price strong").allInnerTexts()).every((p) => rand(p) >= 1000), "slider filters the grid");
+  assert.match(page.url(), /min=1000/);
+  await page.click("[data-reset]");
+  assert.strictEqual(await page.locator("#r-min").inputValue(), await page.locator("#r-min").getAttribute("min"), "reset returns the handle");
+  assert.strictEqual(await page.locator(".card .mockup").count() + await page.locator(".card .thumb img").count(), await page.locator(".card").count(), "every card has artwork");
   step("search / price / category / sort / empty state");
 
   await page.goto(base + "/?cat=Courses&sort=price-asc");
@@ -340,9 +349,13 @@ async function mobile(browser) {
   await page.click(".menu-btn");
   assert.ok(await page.locator("#primary-nav.open").isVisible(), "mobile menu");
   await page.click(".menu-btn");
-  assert.ok(!(await page.locator("#filters").isVisible()), "filters collapsed on mobile");
+  assert.ok(await page.locator("#f-q").isVisible(), "search stays visible on mobile (as on the reference)");
+  assert.ok(!(await page.locator("#filter-panel").isVisible()), "price/category filters collapsed on mobile");
   await page.click(".filter-toggle");
-  assert.ok(await page.locator("#filters").isVisible(), "filters toggle");
+  assert.ok(await page.locator("#filter-panel").isVisible(), "filter toggle opens the panel");
+  assert.strictEqual(await page.locator(".filter-toggle").getAttribute("aria-expanded"), "true");
+  const cols = await page.evaluate(() => getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length);
+  assert.strictEqual(cols, 2, "two product columns on phones (as on the reference)");
   step("mobile menu + filters");
   await page.close();
 }
