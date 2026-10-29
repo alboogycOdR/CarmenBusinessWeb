@@ -71,6 +71,21 @@ begin
 end;
 $$;
 
+-- Rows that exist, bypassing RLS (owner context). "Staff can read all X"
+-- means count_rows = total_rows, independent of leftover local data.
+create function tests.total_rows(p_table text)
+returns bigint
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare n bigint;
+begin
+  execute format('select count(*) from public.%I', p_table) into n;
+  return n;
+end;
+$$;
+
 grant execute on all functions in schema tests to anon, authenticated, service_role;
 
 -- A paid order with an item, a file fulfilment, a delivery token, a payment
@@ -86,14 +101,14 @@ declare
   ful uuid;
 begin
   insert into public.orders (email, access_key_hash, currency, subtotal_minor, total_minor, provider, terms_accepted_at)
-  values (p_email, extensions.digest('k-' || p_email, 'sha256'), 'USD', 2400, 2400, 'paystack', now())
+  values (p_email, extensions.digest('k-' || p_email, 'sha256'), 'ZAR', 2400, 2400, 'payfast', now())
   returning id into oid;
   insert into public.order_items (order_id, product_id, title, product_type, unit_price_minor, quantity, line_total_minor, currency)
-  values (oid, 'a0000000-0000-4000-8000-000000000006', 'The First Book', 'book', 2400, 1, 2400, 'USD')
+  values (oid, 'a0000000-0000-4000-8000-000000000006', 'The First Book', 'book', 2400, 1, 2400, 'ZAR')
   returning id into item;
   update public.orders set status = 'paid', paid_at = now(), provider_txn_id = 'txn_' || oid where id = oid;
   insert into public.payment_events (provider, provider_event_id, type, order_id, payload, status)
-  values ('paystack', 'evt_' || oid, 'charge.success', oid, '{"test": true}', 'processed');
+  values ('payfast', 'evt_' || oid, 'charge.success', oid, '{"test": true}', 'processed');
   insert into public.fulfilments (order_id, order_item_id, asset_id, kind)
   values (oid, item, 'b0000000-0000-4000-8000-000000000007', 'file')
   returning id into ful;

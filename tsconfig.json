@@ -22,5 +22,5 @@
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true
   },
-  "include": ["netlify/functions/**/*", "scripts/**/*", "types/**/*", "tests/**/*.mts"]
+  "include": ["netlify/**/*", "scripts/**/*", "types/**/*", "tests/**/*.mts"]
 }

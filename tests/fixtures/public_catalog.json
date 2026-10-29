@@ -30,9 +30,9 @@
         "#ff7eb3"
       ]
     },
-    "price_minor": 19700,
-    "compare_at_minor": 29700,
-    "currency": "USD",
+    "price_minor": 199700,
+    "compare_at_minor": 299700,
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 1,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -71,9 +71,9 @@
         "#a58bff"
       ]
     },
-    "price_minor": 4700,
+    "price_minor": 49700,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 2,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -110,9 +110,9 @@
         "#4a6fa5"
       ]
     },
-    "price_minor": 7900,
+    "price_minor": 79700,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 3,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -149,9 +149,9 @@
         "#f0b49b"
       ]
     },
-    "price_minor": 6700,
+    "price_minor": 69700,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 4,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -188,9 +188,9 @@
         "#6fd6b1"
       ]
     },
-    "price_minor": 30000,
+    "price_minor": 299700,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 5,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -228,9 +228,9 @@
         "#d1a06b"
       ]
     },
-    "price_minor": 2400,
+    "price_minor": 24900,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 6,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -266,9 +266,9 @@
         "#6aa2b8"
       ]
     },
-    "price_minor": 1900,
+    "price_minor": 19900,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 7,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -303,9 +303,9 @@
         "#c295c4"
       ]
     },
-    "price_minor": 1200,
+    "price_minor": 12900,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 8,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -340,9 +340,9 @@
         "#f2dc9b"
       ]
     },
-    "price_minor": 1500,
+    "price_minor": 14900,
     "compare_at_minor": null,
-    "currency": "USD",
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 9,
     "published_at": "2026-10-28T00:00:00+00:00",
@@ -373,15 +373,15 @@
     },
     "images": [],
     "display": {
-      "badge": "Save 31%",
+      "badge": "Save 11%",
       "color": [
         "#1f1f1f",
         "#e50069"
       ]
     },
-    "price_minor": 22900,
-    "compare_at_minor": 33400,
-    "currency": "USD",
+    "price_minor": 229700,
+    "compare_at_minor": 257400,
+    "currency": "ZAR",
     "allow_quantity": false,
     "sort": 10,
     "published_at": "2026-10-28T00:00:00+00:00",

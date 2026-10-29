@@ -41,6 +41,7 @@
   const icon = {
     cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
     search: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+    filter: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>',
   };
 
   function renderChrome() {
@@ -254,12 +255,19 @@
     view().innerHTML = `
       <header class="page-head"><div class="container"><h1>${esc(S.shop.title)}</h1><p>${esc(S.shop.intro)}</p></div></header>
       <div class="container shop">
-        <button class="btn btn-ghost filter-toggle" type="button" aria-expanded="false" aria-controls="filters">Filters</button>
         <form id="filters" class="filters" role="search" novalidate>
           <div class="searchbox"><label class="sr" for="f-q">Search products</label><input id="f-q" type="search" name="q" placeholder="Search products…" value="${esc(q.get("q") || "")}"><button class="btn btn-icon" type="submit" aria-label="Search">${icon.search}</button></div>
-          <fieldset><legend>Price</legend><div class="price-range"><label class="sr" for="f-min">Minimum price</label><input id="f-min" type="number" name="min" min="0" placeholder="${esc(money(lo))}" value="${esc(q.get("min") || "")}"><span>to</span><label class="sr" for="f-max">Maximum price</label><input id="f-max" type="number" name="max" min="0" placeholder="${esc(money(hi))}" value="${esc(q.get("max") || "")}"></div></fieldset>
-          <fieldset><legend>Categories</legend>${cats.map((c) => `<label class="check"><input type="checkbox" name="cat" value="${esc(c)}"${initialCats.indexOf(c) > -1 ? " checked" : ""}> ${esc(c)}</label>`).join("")}</fieldset>
-          <button type="button" class="link" data-reset>Clear all filters</button>
+          <button class="filter-toggle" type="button" aria-expanded="false" aria-controls="filter-panel">${icon.filter} Filter products</button>
+          <div id="filter-panel" class="filter-panel">
+            <fieldset><legend>Price</legend>
+              <div class="range" aria-hidden="true">
+                <input id="r-min" type="range" min="${lo}" max="${hi}" step="1" value="${esc(q.get("min") || lo)}" tabindex="-1">
+                <input id="r-max" type="range" min="${lo}" max="${hi}" step="1" value="${esc(q.get("max") || hi)}" tabindex="-1">
+              </div>
+              <div class="price-range"><label class="sr" for="f-min">Minimum price</label><input id="f-min" type="number" name="min" min="0" placeholder="${esc(money(lo))}" value="${esc(q.get("min") || "")}"><span aria-hidden="true">–</span><label class="sr" for="f-max">Maximum price</label><input id="f-max" type="number" name="max" min="0" placeholder="${esc(money(hi))}" value="${esc(q.get("max") || "")}"></div></fieldset>
+            <fieldset><legend>Categories</legend>${cats.map((c) => `<label class="check"><input type="checkbox" name="cat" value="${esc(c)}"${initialCats.indexOf(c) > -1 ? " checked" : ""}> ${esc(c)}</label>`).join("")}</fieldset>
+            <button type="button" class="link" data-reset>Clear all filters</button>
+          </div>
         </form>
         <section aria-live="polite"><div class="toolbar"><p id="count" class="muted"></p>
           <label class="sort">Sort <select id="f-sort" name="sort"><option value="featured">Featured</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="title">Title A–Z</option></select></label></div>
@@ -298,12 +306,38 @@
     form.addEventListener("change", () => { pageNo = 1; draw(); });
     sortEl.addEventListener("change", () => { pageNo = 1; draw(); });
     view().addEventListener("click", (e) => {
-      if (e.target.closest("[data-reset]")) { form.reset(); $$("input", form).forEach((i) => { if (i.type === "checkbox") i.checked = false; else i.value = ""; }); pageNo = 1; draw(); }
+      if (e.target.closest("[data-reset]")) { form.reset(); $$("input", form).forEach((i) => { if (i.type === "checkbox") i.checked = false; else if (i.type !== "range") i.value = ""; }); pageNo = 1; draw(); }
       const a = e.target.closest(".pager a");
       if (a) { e.preventDefault(); pageNo = Number(a.getAttribute("data-page")); draw(); $(".shop").scrollIntoView(); }
     });
     const tgl = $(".filter-toggle");
-    tgl.addEventListener("click", () => tgl.setAttribute("aria-expanded", String(form.classList.toggle("open"))));
+    tgl.addEventListener("click", () => tgl.setAttribute("aria-expanded", String($("#filter-panel").classList.toggle("open"))));
+
+    // Dual-handle price slider, kept in sync with the number inputs (which carry the
+    // value, the URL state and keyboard access). A handle at its end means "no limit".
+    const rMin = $("#r-min"), rMax = $("#r-max"), fMin = $("#f-min"), fMax = $("#f-max"), range = $(".range");
+    const paint = () => {
+      const span = hi - lo || 1;
+      range.style.setProperty("--lo", ((Number(rMin.value) - lo) / span) * 100 + "%");
+      range.style.setProperty("--hi", ((Number(rMax.value) - lo) / span) * 100 + "%");
+    };
+    const fromSlider = (e) => {
+      if (Number(rMin.value) > Number(rMax.value)) (e.target === rMin ? rMin : rMax).value = e.target === rMin ? rMax.value : rMin.value;
+      fMin.value = Number(rMin.value) > lo ? rMin.value : "";
+      fMax.value = Number(rMax.value) < hi ? rMax.value : "";
+      paint();
+    };
+    [rMin, rMax].forEach((r) => {
+      r.addEventListener("input", (e) => { e.stopPropagation(); fromSlider(e); pageNo = 1; draw(); });
+      r.addEventListener("change", (e) => e.stopPropagation());
+    });
+    [fMin, fMax].forEach((f) => f.addEventListener("input", () => {
+      rMin.value = fMin.value === "" ? lo : Math.max(lo, Math.min(hi, Number(fMin.value)));
+      rMax.value = fMax.value === "" ? hi : Math.max(lo, Math.min(hi, Number(fMax.value)));
+      paint();
+    }));
+    form.addEventListener("reset", () => setTimeout(() => { rMin.value = lo; rMax.value = hi; paint(); }));
+    paint();
     draw();
   }
 
@@ -345,32 +379,87 @@
 
   function renderCart() {
     const l = lines(), t = totals();
-    const codeMsg = code && !t.code ? '<p class="form-msg err">That code is not valid.</p>' : t.code ? `<p class="form-msg ok">Code ${esc(t.code)} applied: ${t.percent}% off.</p>` : "";
+    // The browser only previews codes it knows; the server is the authority (and knows more codes).
+    const codeMsg = code && !t.code ? '<p class="form-msg">This code will be checked when you pay.</p>' : t.code ? `<p class="form-msg ok">Code ${esc(t.code)} applied: ${t.percent}% off.</p>` : "";
+    const cancelled = params().get("cancelled");
     view().innerHTML = `<div class="container cart-page"><h1>Cart</h1>
+      ${cancelled ? '<p class="notice" role="status">Payment was cancelled, so you have not been charged. Your cart is still here.</p>' : ""}
       ${l.length ? `<div class="cart-grid"><ul class="lines">${l.map((x) => lineRow(x, false)).join("")}</ul>
         <div class="cart-side"><form class="coupon" data-coupon novalidate><label for="cp">Discount code</label><div><input id="cp" name="code" value="${esc(code)}" autocomplete="off"><button class="btn btn-dark" type="submit">Apply</button></div>${codeMsg}</form>
-          ${totalsHtml(t)}<button class="btn btn-block" id="checkout" type="button">Go to checkout</button><div id="checkout-msg" role="status" aria-live="polite"></div></div></div>`
+          ${totalsHtml(t)}
+          <form id="checkout" class="checkout-form" novalidate>
+            <label for="co-email">Email for your receipt and access details <b>*</b></label>
+            <input id="co-email" name="email" type="email" autocomplete="email" required>
+            <label class="check"><input id="co-terms" name="terms" type="checkbox" required> <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a> <b>*</b></span></label>
+            <label class="check"><input id="co-news" name="news" type="checkbox"> <span>Email me occasional news and offers (optional)</span></label>
+            <button class="btn btn-block" id="pay" type="submit">Pay securely with Payfast</button>
+            <p class="muted small">You'll pay on Payfast's secure page, in rands. We never see your card details.</p>
+            <div id="checkout-msg" role="status" aria-live="polite"></div>
+          </form></div></div>`
         : '<p>Your cart is currently empty!</p><p><a class="btn" href="/">Start shopping</a></p>'}</div>`;
     const f = $("[data-coupon]");
     if (f) f.addEventListener("submit", (e) => { e.preventDefault(); setCode($("#cp").value.trim().toUpperCase()); });
-    const b = $("#checkout"); if (b) b.addEventListener("click", checkout);
+    const co = $("#checkout"); if (co) co.addEventListener("submit", checkout);
   }
 
-  /* Server checkout if configured (Payfast, PR 3); until then the customer can email their order. */
-  function checkout() {
-    const msg = $("#checkout-msg"), btn = $("#checkout");
+  const CHECKOUT_ERRORS = {
+    terms_required: "Please accept the Terms & Conditions.",
+    invalid_email: "Please enter a valid email address.",
+    coupon_invalid: "That discount code is not valid. Remove it to continue.",
+    coupon_exhausted: "That discount code has been fully used. Remove it to continue.",
+    coupon_already_used: "You've already used that discount code. Remove it to continue.",
+    unknown_product: "An item in your cart is no longer available. Please remove it and try again.",
+    invalid_quantity: "Please check the items in your cart and try again.",
+    price_changed: "Prices have changed since this page loaded. Please refresh the page to see the latest prices.",
+  };
+
+  /* Server checkout (PR 3): the server prices the order and returns signed Payfast
+   * fields; we post them to Payfast. Without a configured endpoint (static preview),
+   * the customer can email their order instead. */
+  function checkout(e) {
+    e.preventDefault();
+    const msg = $("#checkout-msg"), btn = $("#pay");
     const l = lines(), t = totals();
-    if (S.checkout.endpoint) {
-      btn.disabled = true; msg.textContent = "Taking you to secure checkout…";
-      fetch(S.checkout.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: cart, code: t.code }) })
-        .then((r) => r.json().then((j) => { if (!r.ok || !L.safeUrl(j.url)) throw new Error(j.error || r.status); return j; }))
-        .then((j) => { location.href = j.url; })
-        .catch(() => { btn.disabled = false; msg.innerHTML = `<p class="form-msg err">Checkout is unavailable right now. Please try again or email <a href="mailto:${esc(S.brand.email)}">${esc(S.brand.email)}</a>.</p>`; });
+    const say = (html) => { msg.innerHTML = `<p class="form-msg err">${html}</p>`; };
+    if (!S.checkout.endpoint) {
+      const order = l.map((x) => `${x.qty} x ${x.product.title} (${money(x.product.price)})`).join("\n") + `\nTotal: ${cents(t.total)}${t.code ? " (code " + t.code + ")" : ""}`;
+      msg.innerHTML = `<div class="notice"><p><strong>Complete your order</strong></p>
+        <p><a href="${esc(L.mailtoHref(S.brand.email, "Order request", order))}">Email my order</a> and we will send a secure payment link.</p></div>`;
       return;
     }
-    const order = l.map((x) => `${x.qty} x ${x.product.title} (${money(x.product.price)})`).join("\n") + `\nTotal: ${cents(t.total)}${t.code ? " (code " + t.code + ")" : ""}`;
-    msg.innerHTML = `<div class="notice"><p><strong>Complete your order</strong></p>
-      <p><a href="${esc(L.mailtoHref(S.brand.email, "Order request", order))}">Email my order</a> and we will send a secure payment link.</p></div>`;
+    const email = $("#co-email").value.trim();
+    if (!L.isEmail(email)) { say(esc(CHECKOUT_ERRORS.invalid_email)); $("#co-email").focus(); return; }
+    if (!$("#co-terms").checked) { say(esc(CHECKOUT_ERRORS.terms_required)); $("#co-terms").focus(); return; }
+    const payload = {
+      items: cart, email, couponCode: code, termsAccepted: true, marketingOptIn: $("#co-news").checked,
+      // Only claim a total we can compute: a code we don't know is priced by the server alone.
+      expectedTotal: !code || t.code ? t.total : undefined,
+    };
+    btn.disabled = true; msg.textContent = "Preparing secure payment…";
+    const fail = (html) => { btn.disabled = false; say(html); };
+    fetch(S.checkout.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      .then((r) => r.json().catch(() => ({})).then((j) => ({ r, j })))
+      .then(({ r, j }) => {
+        if (r.status === 201 && j.payment && /^https:\/\/(sandbox|www)\.payfast\.co\.za\/eng\/process$/.test(j.payment.action)) {
+          try { sessionStorage.setItem("cw_order_" + j.reference, j.accessKey); } catch (err) { /* status page will offer support instead */ }
+          msg.textContent = "Taking you to Payfast…";
+          const form = document.createElement("form");
+          form.method = "post"; form.action = j.payment.action; form.hidden = true;
+          j.payment.fields.forEach(([name, value]) => {
+            const input = document.createElement("input");
+            input.type = "hidden"; input.name = name; input.value = value;
+            form.appendChild(input);
+          });
+          document.body.appendChild(form);
+          form.submit();
+          return;
+        }
+        if (j.error === "below_minimum") return fail(`Orders must be at least ${esc(cents(j.minimum_minor))}.`);
+        if (CHECKOUT_ERRORS[j.error]) return fail(esc(CHECKOUT_ERRORS[j.error]));
+        if (r.status === 429) return fail("Too many attempts. Please wait a minute and try again.");
+        throw new Error(j.error || r.status);
+      })
+      .catch(() => fail(`Checkout is unavailable right now. Please try again or email <a href="mailto:${esc(S.brand.email)}">${esc(S.brand.email)}</a>.`));
   }
 
   function renderReviews() {
@@ -421,9 +510,47 @@
       <p class="muted">Need help accessing your courses? Please email us at <a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a>.</p></div>`;
   }
 
+  /* Payfast returns the buyer here. Spec §4.1: say "paid" only when the server
+   * confirms it (the ITN, PR 4), never because of this redirect. */
   function renderSuccess() {
-    cart = []; saveCart(); setCode("");
-    view().innerHTML = `<div class="narrow center"><h1>Thank you!</h1><p>Your order is confirmed. A receipt and your access details are on their way to your inbox.</p><p class="muted">Need help? Email <a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a>.</p><p><a class="btn" href="/">Keep shopping</a></p></div>`;
+    const ref = params().get("ref") || "";
+    let key = null;
+    try { key = sessionStorage.getItem("cw_order_" + ref); } catch (e) { /* storage blocked */ }
+    const support = `<a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a>`;
+    const show = (title, body) => {
+      view().innerHTML = `<div class="narrow center" id="order-status" data-state="${esc(title.state)}"><h1>${esc(title.text)}</h1>${body}
+        ${ref ? `<p class="muted small">Order reference: <strong>${esc(ref)}</strong></p>` : ""}</div>`;
+    };
+    const states = {
+      pending: () => show({ state: "pending", text: "Confirming your payment…" },
+        `<p>We're waiting for Payfast to confirm your payment. This usually takes a few seconds, so please keep this page open.</p>
+         <p class="muted">If you completed payment, you'll also get an email from us. No email after 30 minutes? Contact ${support} with your order reference.</p>`),
+      paid: () => {
+        cart = []; saveCart(); setCode("");
+        try { sessionStorage.removeItem("cw_order_" + ref); } catch (e) { /* ignore */ }
+        show({ state: "paid", text: "Payment received. Thank you!" },
+          `<p>Your receipt and access details are on their way to your inbox.</p><p><a class="btn" href="/">Keep shopping</a></p>`);
+      },
+      unpaid: () => show({ state: "unpaid", text: "Payment not completed" },
+        `<p>This payment wasn't completed, so you have not been charged. Your cart is still saved.</p><p><a class="btn" href="/cart.html">Return to cart</a></p>`),
+      unknown: () => show({ state: "unknown", text: "We can't show this order here" },
+        `<p>If you completed payment, you'll receive an email confirmation shortly. For help, contact ${support}${ref ? " with your order reference" : ""}.</p>`),
+    };
+    if (!/^CBW-[0-9A-HJKMNP-TV-Z]{10}$/.test(ref) || !key) { states.unknown(); return; }
+    states.pending();
+    let tries = 0;
+    const poll = () => {
+      fetch(`/api/order-status?ref=${encodeURIComponent(ref)}&k=${encodeURIComponent(key)}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : r.status === 404 ? { status: "missing" } : Promise.reject(r.status)))
+        .then((j) => {
+          if (j.status === "paid") return states.paid();
+          if (j.status === "failed" || j.status === "expired") return states.unpaid();
+          if (j.status === "missing") return states.unknown();
+          if (++tries < 40) setTimeout(poll, 3000); // ~2 minutes, then stop with the support message
+        })
+        .catch(() => { if (++tries < 40) setTimeout(poll, 3000); });
+    };
+    poll();
   }
 
   /* ---------- Boot ---------- */
