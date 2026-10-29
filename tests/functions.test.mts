@@ -200,7 +200,10 @@ test("order status: needs the reference AND the buyer's key; no probing", async 
   const get = (q: string) => orderStatus(new Request(`${SITE}/api/order-status?${q}`));
   const ok = await get(`ref=${b.reference}&k=${b.accessKey}`);
   assert.strictEqual(ok.status, 200);
-  assert.deepStrictEqual(await body(ok), { reference: b.reference, status: "pending", totalMinor: 12900, currency: "ZAR" });
+  assert.deepStrictEqual(await body(ok), {
+    reference: b.reference, status: "pending", totalMinor: 12900, currency: "ZAR",
+    items: [{ title: "The Companion Workbook", type: "template", downloads: 0, links: 0, manual: 0 }], // nothing issued until paid (PR 4)
+  });
   const otherKey = randomBytes(32).toString("base64url");
   assert.strictEqual((await get(`ref=${b.reference}&k=${otherKey}`)).status, 404, "wrong key looks like not found");
   assert.strictEqual((await get(`ref=CBW-0000000000&k=${b.accessKey}`)).status, 404);

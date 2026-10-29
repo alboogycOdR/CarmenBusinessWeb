@@ -346,6 +346,9 @@ isOneToOne: false
                            },
 "payfast_minimum_minor":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"process_payfast_itn":
+{ Args: { "p_amount_minor": number,"p_check_error": string,"p_event_key": string,"p_livemode": boolean,"p_payload": Json,"p_payment_status": string,"p_reference": string,"p_txn_id": string }; Returns: Json
                            }
           }
           Enums: {

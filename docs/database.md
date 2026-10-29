@@ -58,7 +58,7 @@ Notes:
 - "denied" means the API returns `401 / 42501`, because privileges are revoked at the grant level. "No rows" means RLS filters everything out.
 - Staff powers need an `admin_profiles` row **and** a JWT with `aal = aal2`, which a session only gets after completing TOTP MFA.
 - `TRUNCATE`, `REFERENCES` and `TRIGGER` are revoked from API roles, because RLS does not govern them.
-- There are no functions in `public`, so there is no RPC surface. The helpers live in `private`, which PostgREST does not expose.
+- The only functions in `public` are the server RPCs (`create_pending_order`, `get_order_status`, `expire_stale_orders`, `payfast_minimum_minor`, `process_payfast_itn`). EXECUTE is granted to `service_role` alone, and a pgTAP test fails if anon or authenticated can call any `public` function. Helpers live in `private`, which PostgREST does not expose.
 - Public sign-up is disabled in `supabase/config.toml` (`[auth] enable_signup = false`). Staff are created by an owner with the service role (script in PR 8).
 
 ## 3. Integrity guarantees (hold for every role, including the service role)
@@ -108,3 +108,40 @@ The seed (`supabase/seed.sql`) is **local/CI only**. It mirrors the storefront's
 - **Seed currency is USD** to match today's storefront. **D2 is now decided (ZAR, ADR-0009):** PR 3 migrates the catalogue and seed to rands, adds `payfast` to `payment_provider`, and adds ZAR-only constraints.
 - **`[auth.email] enable_signup` must stay `true`.** In GoTrue it toggles the email/password provider itself. Setting it to `false` silently blocks staff sign-in, which the API test caught during development. Public sign-up is blocked by `[auth] enable_signup = false`.
 - `product_type` adds `guide` and `template` beside `course`, `book` and `bundle`, per spec §1 ("courses, e-books, guides, templates and bundles").
+
+## 8. Payment confirmation (PR 4)
+
+`/api/payfast/itn` runs Payfast's transport checks, then calls `process_payfast_itn()` **once per delivery**. Everything that touches money or access happens in that one transaction:
+
+```mermaid
+flowchart TD
+  A[ITN delivery] --> S{signature valid?}
+  S -- no --> R["store under rejected:&lt;uuid&gt;<br/>never linked to an order → 400"]
+  S -- yes --> C{"source IP · merchant_id ·<br/>Payfast VALID"}
+  C -- fails --> F["store failed under pf_payment_id:status<br/>(403 / 200, or 503 if transient)"]
+  C -- pass --> E{event already processed or ignored?}
+  E -- yes --> D[duplicate → 200]
+  E -- "new, or failed before" --> O{"order exists · same live/sandbox mode ·<br/>COMPLETE · exact amount"}
+  O -- "not COMPLETE" --> I[ignored → 200; order stays pending]
+  O -- fails --> F
+  O -- pass --> P["confirm_payment: pending/expired → paid,<br/>fulfilments + order_paid email, once"]
+```
+
+| Outcome | Meaning | HTTP | What a person does |
+|---|---|---|---|
+| `paid` | Order paid; fulfilments and one `order_paid` outbox row created | 200 | Nothing |
+| `already_paid` / `duplicate` | The same payment again (Payfast retry, replay) | 200 | Nothing |
+| `ignored` | Not `COMPLETE` (e.g. `CANCELLED`) | 200 | Nothing |
+| failed `amount_mismatch`, `merchant_mismatch`, `server_validation_invalid`, `unknown_order`, `mode_mismatch` | Not applied | 200 | Investigate. Replay only once the cause is fixed |
+| failed `paid_by_other_transaction` | The buyer paid twice | 200 | Refund the second payment (PR 7) |
+| failed `server_validation_unavailable`, `source_unverified` | Payfast or DNS unreachable | 503 | Usually nothing: Payfast retries |
+| failed `source_ip_mismatch` | Not from Payfast's servers | 403 | If genuine (Payfast changed its IPs), update `PAYFAST_ITN_CIDRS` and replay |
+| rejected `signature_mismatch` | Bad signature | 400 | If the passphrase was wrong, fix it and replay |
+
+**Replay** (`node scripts/replay-event.mts <payment_event id>`, with the ITN function's environment):
+- re-checks the stored signature and asks Payfast to confirm it again;
+- processes the event **at most once**;
+- refuses events that are already processed or ignored.
+
+The admin "Replay" button (PR 10) will call the same code.
+

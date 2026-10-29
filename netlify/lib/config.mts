@@ -1,7 +1,7 @@
 /* Environment configuration for server functions. Fails closed: a missing or
  * malformed variable stops the request before any order is created. Error
  * messages name variables, never their values. */
-import type { PayfastCredentials } from "./payfast.mts";
+import type { PayfastCredentials, PayfastMode } from "./payfast.mts";
 
 export class ConfigError extends Error {}
 
@@ -61,4 +61,25 @@ export function loadCheckoutConfig(env: Env): CheckoutConfig {
     brand: (env.STORE_NAME ?? "").trim() || "Carmen",
     payfast: { mode: mode as "sandbox" | "live", merchantId, merchantKey, passphrase },
   };
+}
+
+export interface ItnConfig extends DbConfig {
+  mode: PayfastMode;
+  merchantId: string;
+  passphrase: string;
+}
+
+/* What the ITN endpoint and the replay tool need. No site URL or merchant key:
+ * a notification only has to be verified, never signed. */
+export function loadItnConfig(env: Env): ItnConfig {
+  const problems: string[] = [];
+  let db: DbConfig | null = null;
+  try { db = loadDbConfig(env); } catch (e) { problems.push((e as Error).message); }
+  const mode = required(env, "PAYFAST_MODE", problems);
+  const merchantId = required(env, "PAYFAST_MERCHANT_ID", problems);
+  const passphrase = required(env, "PAYFAST_PASSPHRASE", problems);
+  if (mode && mode !== "sandbox" && mode !== "live") problems.push("PAYFAST_MODE must be sandbox or live");
+  if (merchantId && !/^\d{1,10}$/.test(merchantId)) problems.push("PAYFAST_MERCHANT_ID must be numeric");
+  if (problems.length || !db) throw new ConfigError(problems.join("; "));
+  return { ...db, mode: mode as PayfastMode, merchantId, passphrase };
 }

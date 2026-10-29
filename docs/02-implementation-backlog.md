@@ -168,6 +168,27 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 
 **Acceptance:** spec §7 "Checkout success" (exactly one paid order and one delivery set) and "Webhook replay". Tested with the fixture suite and in the **Payfast sandbox on the staging deploy**, which needs a public `notify_url` (D16). The sandbox sends each ITN only once, so the replay tool is exercised there too.
 
+**As built (PR 4):**
+- **Source check corrected.** Payfast's public hostnames now resolve to Google Cloud *inbound* load balancers (`www` → 34.107.176.71, `sandbox` → 34.120.184.229, checked 29 Oct 2026). ITNs come from the server ranges on Payfast's "Ports and IP addresses" page. A hostname-only check, as planned above, would have rejected every genuine payment. The check accepts the published ranges (`PAYFAST_ITN_CIDRS`) **or** an address of the four hosts. If Payfast changes its ranges, notifications fail with 403 and Payfast retries; each one is stored and can be replayed (ADR-0009 §5).
+- **Response codes decide Payfast's retries.** Payfast resends until it gets a 200 ("immediately, then after 10 minutes, then exponentially longer").
+  - **503 for transient faults:** Payfast's validate endpoint or DNS unreachable, the database down, or misconfiguration. The retry then recovers on its own.
+  - **200 for handled events and permanent failures:** paid, duplicate, ignored, amount or merchant mismatch, `INVALID`, unknown order, double payment. Permanent failures need a person (or the replay tool).
+  - **400/403 for non-Payfast deliveries.**
+- **Forged notifications cannot block real ones.** A bad-signature delivery is stored under `rejected:<uuid>`, never under the real `pf_payment_id:status` key, and is never linked to an order.
+  - It is stored only when it comes from Payfast's servers, so it can be replayed after a passphrase fix.
+  - From anywhere else it is answered and logged but not stored, so strangers cannot fill the table.
+  - This deliberately narrows "every failure is stored" above.
+- **A failed event is reprocessed when it is delivered again** (by Payfast's retry or the replay tool). Processed and ignored events are acknowledged as duplicates. This replaces "returns 200 once stored" for transient faults.
+- **`CANCELLED` and other non-`COMPLETE` statuses are recorded and ignored.** The order stays pending, so a later `COMPLETE` for it is still honoured; the plan's "pending → failed" would have refused that money.
+- **A second, different payment for an already-paid order** is stored as `paid_by_other_transaction` for a refund (PR 7). It is not applied, and the PR 1 trigger blocks it independently.
+- **Fulfilments:**
+  - file and instant-link assets → `queued`, for delivery in PR 5/6;
+  - manual-access assets → `action_required`, with the promised timing;
+  - bundles deliver every component's assets;
+  - items with nothing to deliver are returned as `unfulfilled_items` and logged as a warning.
+- **Replay** (`scripts/replay-event.mts`) re-verifies the stored signature and asks Payfast's server again (`VALID`); only the source-IP check is skipped. A delivery rejected while the passphrase was wrong is recovered under its real key, and the old row is closed.
+- **`order-status`** now lists items with counts of downloads, links and manual access, never the links themselves. The success page shows them.
+
 ### PR 5: Private storage, delivery tokens, download endpoint
 **Scope**
 - A private Supabase bucket `product-files` (no public policy).

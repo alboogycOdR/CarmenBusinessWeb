@@ -272,3 +272,8 @@ table.info { border-collapse: collapse; width: 100%; max-width: 640px; }
   .card .btn { padding: .55rem 1rem; font-size: .82rem; }
   .badge { font-size: .65rem; padding: .1rem .5rem; top: .45rem; right: .45rem; }
 }
+
+/* Success page: what each purchased item delivers (PR 4). */
+.delivery-list { list-style: none; margin: 1.25rem auto; padding: 0; max-width: 34rem; text-align: left; }
+.delivery-list li { padding: .7rem 0; border-top: 1px solid var(--line); }
+.delivery-list li:last-child { border-bottom: 1px solid var(--line); }
