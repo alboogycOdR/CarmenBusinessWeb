@@ -2,7 +2,8 @@
  * Dependency-free: business logic lives in SQL functions (ADR-0003). */
 import type { DbConfig } from "./config.mts";
 
-/* A business-rule rejection raised by a SQL function as 'checkout:<code>'. */
+/* A business-rule rejection raised by a SQL function as '<area>:<code>'
+ * (checkout:... from create_pending_order, delivery:... from issue_delivery_tokens). */
 export class RuleError extends Error {
   readonly code: string;
   readonly detail: Record<string, unknown>;
@@ -36,10 +37,11 @@ export async function rpc<T>(cfg: DbConfig, fn: string, args: Record<string, unk
   if (res.ok) return body as T;
 
   const err = (body ?? {}) as { code?: string; message?: string; details?: string };
-  if (err.code === "P0001" && typeof err.message === "string" && err.message.startsWith("checkout:")) {
+  const rule = err.code === "P0001" && typeof err.message === "string" ? /^(?:checkout|delivery):(.+)$/.exec(err.message) : null;
+  if (rule) {
     let detail: Record<string, unknown> = {};
     try { detail = err.details ? JSON.parse(err.details) : {}; } catch { /* keep empty */ }
-    throw new RuleError(err.message.slice("checkout:".length), detail);
+    throw new RuleError(rule[1]!, detail);
   }
   throw new Error(`rpc ${fn} failed: HTTP ${res.status} ${err.code ?? ""} ${err.message ?? text.slice(0, 200)}`);
 }

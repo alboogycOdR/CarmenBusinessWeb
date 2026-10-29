@@ -213,6 +213,28 @@ async function cartFlow(browser) {
   assert.strictEqual((await deliverItn(paid)).status, 200, "a repeated ITN is acknowledged (duplicate)");
   step("success page: neutral until the verified ITN pays the order, then lists the delivery");
 
+  // The buyer's download link (sent by email from PR 6): landing page, then the real private file.
+  const fileBytes = Buffer.from("%PDF-1.4\n% e2e companion workbook " + Date.now());
+  const up = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/product-files/workbook/companion-workbook.pdf`, {
+    method: "POST", body: fileBytes,
+    headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/pdf", "x-upsert": "true" },
+  });
+  assert.ok(up.ok, "fixture upload");
+  const { issueDownloadLinks } = await import("../scripts/issue-download-links.mts");
+  const { links } = await issueDownloadLinks({ supabaseUrl: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }, base, paid.m_payment_id);
+  assert.strictEqual(links.length, 1);
+  await p2.goto(links[0].url);
+  assert.match(await txt(p2, "h1"), /Companion Workbook \(PDF\)/);
+  assert.match(await txt(p2, "main"), /5 of 5 downloads left/);
+  const [dl] = await Promise.all([p2.waitForEvent("download"), p2.click("button[type=submit]")]);
+  assert.strictEqual(dl.suggestedFilename(), "companion-workbook.pdf");
+  assert.ok(fs.readFileSync(await dl.path()).equals(fileBytes), "the buyer receives exactly the private file");
+  await p2.goto(links[0].url);
+  assert.match(await txt(p2, "main"), /4 of 5 downloads left/);
+  await p2.goto(base + "/api/download?t=" + "x".repeat(43));
+  assert.match(await txt(p2, "h1"), /isn't valid/);
+  step("download link: landing page, Download button, the private file, count shown");
+
   // A code only the server knows (FIXED20, R20 off) is applied at checkout.
   await p2.goto(base + "/"); await p2.locator('[data-add="workbook"]').click(); await p2.goto(base + "/cart.html");
   await p2.fill("#cp", "fixed20"); await p2.click(".coupon button");
@@ -403,6 +425,7 @@ async function admin(pathAndQuery, init = {}) {
   api["/api/order-status"] = (await import("../netlify/functions/order-status.mts")).default;
   const { createItnHandler } = await import("../netlify/functions/payfast-itn.mts");
   itnHandler = createItnHandler({ resolveHost: async () => [], validate: async () => "VALID" });
+  api["/api/download"] = (await import("../netlify/functions/download.mts")).default;
   const browser = await chromium.launch();
   const shots = process.env.SHOTS;
   try {
