@@ -1,17 +1,14 @@
 /*
- * ALL editable content lives here: brand, navigation, products, reviews, free
- * resources. Replace the placeholder values with the client's real content.
- * No build step: every page loads this file directly. The (optional) Netlify
- * checkout function also reads it, so prices can never be tampered with in the
- * browser.
+ * Editable SITE CONTENT: brand, navigation, copy, reviews, free resources,
+ * popup and discount codes shown in the browser.
  *
- * Product fields
- *   type         "course" | "book" | "bundle"   (also becomes a category)
- *   tags         extra categories shown in the sidebar filter
- *   image        optional path/URL to a product mockup (e.g. "assets/img/x.webp");
- *                blank = a generated cover using `color`
- *   checkoutUrl  optional hosted link (Stripe Payment Link, PayPal, Gumroad...)
- *                that enables a "Buy now" button and the no-server cart fallback
+ * PRODUCTS ARE NOT HERE. Since PR 2 the catalogue lives in the database
+ * (Supabase `products`, edited in the admin from PR 9) and is generated into
+ * /assets/js/catalog.js by `npm run build` (scripts/build.mts). Prices shown in
+ * the browser are display-only: checkout always re-prices from the database.
+ *
+ * Review `productId` values must match a published product slug; the build
+ * fails if one does not.
  */
 window.SITE = {
   brand: {
@@ -33,11 +30,11 @@ window.SITE = {
   announcement: "Use code SAVE10 for 10% off your first order",
 
   nav: [
-    { label: "Shop", href: "index.html" },
-    { label: "Reviews", href: "reviews.html" },
-    { label: "Free Resources", href: "free.html" },
-    { label: "About", href: "about.html" },
-    { label: "Contact", href: "contact.html" },
+    { label: "Shop", href: "/" },
+    { label: "Reviews", href: "/reviews.html" },
+    { label: "Free Resources", href: "/free.html" },
+    { label: "About", href: "/about.html" },
+    { label: "Contact", href: "/contact.html" },
   ],
 
   shop: {
@@ -48,9 +45,9 @@ window.SITE = {
   },
 
   /* Cart + checkout.
-   * endpoint: URL of the checkout function (see README). Blank = no server:
-   * the cart then shows a direct "Pay" link per item (needs checkoutUrl) or
-   * lets the customer email their order. */
+   * endpoint: the Payfast checkout function (PR 3). Blank = no server yet:
+   * the cart lets the customer email their order instead.
+   * discounts: display-only previews; PR 3 moves coupon validation server-side. */
   checkout: {
     endpoint: "",
     discounts: { SAVE10: { percent: 10 } },
@@ -86,312 +83,6 @@ window.SITE = {
       { title: "Tutorial Library", text: "Short how-to videos on our YouTube channel.", url: "https://youtube.com/", cta: "Browse tutorials" },
     ],
   },
-
-  products: [
-      {
-          "id": "signature-course",
-          "type": "course",
-          "title": "The Signature Course: Your Complete Programme",
-          "price": 197,
-          "compareAt": 297,
-          "badge": "Best seller",
-          "color": [
-              "#e50069",
-              "#ff7eb3"
-          ],
-          "tags": [
-              "Marketing",
-              "Beginner"
-          ],
-          "summary": "A self-paced video programme with workbooks, templates and a private community.",
-          "description": [
-              "Replace this with the transformation the course delivers and who it is for."
-          ],
-          "included": [
-              "The complete step-by-step roadmap, from first idea to first customers.",
-              "Plug-and-play templates and swipe files you can copy today.",
-              "Real examples from our own tested campaigns.",
-              "Private student community for feedback and accountability.",
-              "Lifetime access and free updates."
-          ],
-          "info": {
-              "Format": "Video lessons + PDF workbook",
-              "Access": "Lifetime",
-              "Level": "Beginner to intermediate",
-              "Duration": "6 hours"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "starter-course",
-          "type": "course",
-          "title": "Starter Foundations: Your First Win",
-          "price": 47,
-          "badge": "New",
-          "color": [
-              "#4915e5",
-              "#a58bff"
-          ],
-          "tags": [
-              "Beginner"
-          ],
-          "summary": "Three focused lessons you can finish in a weekend.",
-          "description": [
-              "Perfect for beginners who want a quick, low-risk way to start."
-          ],
-          "included": [
-              "3 short video lessons.",
-              "Quick-start checklist.",
-              "Lifetime access."
-          ],
-          "info": {
-              "Format": "Video lessons",
-              "Access": "Lifetime",
-              "Level": "Beginner",
-              "Duration": "1 hour"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "masterclass",
-          "type": "course",
-          "title": "Live Masterclass Replay with Q&A",
-          "price": 79,
-          "color": [
-              "#142341",
-              "#4a6fa5"
-          ],
-          "tags": [
-              "Marketing"
-          ],
-          "summary": "A 3-hour deep-dive workshop plus the full Q&A recording.",
-          "description": [
-              "Replace with details of the masterclass content."
-          ],
-          "included": [
-              "3 hours of recorded training.",
-              "Slides and notes.",
-              "Full Q&A recording."
-          ],
-          "info": {
-              "Format": "Video replay",
-              "Access": "Lifetime",
-              "Level": "All levels",
-              "Duration": "3 hours"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "mindset-course",
-          "type": "course",
-          "title": "Confident Action: A Mindset Course",
-          "price": 67,
-          "color": [
-              "#b5654a",
-              "#f0b49b"
-          ],
-          "tags": [
-              "Mindset"
-          ],
-          "summary": "Practical exercises to build confidence and follow through.",
-          "description": [
-              "Replace with course details."
-          ],
-          "included": [
-              "5 guided lessons.",
-              "Daily action planner.",
-              "Audio versions for on the go."
-          ],
-          "info": {
-              "Format": "Video + audio",
-              "Access": "Lifetime",
-              "Level": "All levels",
-              "Duration": "2 hours"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "growth-course",
-          "type": "course",
-          "title": "Scale It: Growing Beyond Your First Sales",
-          "price": 300,
-          "color": [
-              "#0b6e4f",
-              "#6fd6b1"
-          ],
-          "tags": [
-              "Marketing",
-              "Scale"
-          ],
-          "summary": "How we grow revenue per customer once the first sales are in.",
-          "description": [
-              "Replace with course details."
-          ],
-          "included": [
-              "Pricing and offer structure.",
-              "Upsell and repeat-purchase playbook.",
-              "Automation checklists."
-          ],
-          "info": {
-              "Format": "Video lessons",
-              "Access": "Lifetime",
-              "Level": "Intermediate",
-              "Duration": "4 hours"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "book-one",
-          "type": "book",
-          "title": "The First Book: A Practical Guide",
-          "price": 24,
-          "badge": "New",
-          "color": [
-              "#7a4b2a",
-              "#d1a06b"
-          ],
-          "tags": [
-              "Beginner",
-              "Mindset"
-          ],
-          "summary": "The book that started it all. Ebook with bonus worksheets.",
-          "description": [
-              "Replace with the book blurb: two or three short paragraphs ending with what the reader will gain."
-          ],
-          "included": [
-              "Ebook (PDF and EPUB), instant download.",
-              "Bonus worksheets.",
-              "Link to the print edition."
-          ],
-          "info": {
-              "Format": "PDF + EPUB",
-              "Access": "Instant download",
-              "Pages": "220"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "book-two",
-          "type": "book",
-          "title": "The Second Book: Stories and Lessons",
-          "price": 19,
-          "color": [
-              "#23404f",
-              "#6aa2b8"
-          ],
-          "tags": [
-              "Mindset"
-          ],
-          "summary": "Short, honest chapters you can read in one sitting.",
-          "description": [
-              "Replace with the book blurb."
-          ],
-          "included": [
-              "Ebook, instant download.",
-              "Reading-group guide."
-          ],
-          "info": {
-              "Format": "PDF + EPUB",
-              "Access": "Instant download",
-              "Pages": "180"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "workbook",
-          "type": "book",
-          "title": "The Companion Workbook",
-          "price": 12,
-          "color": [
-              "#5a3d5c",
-              "#c295c4"
-          ],
-          "tags": [
-              "Worksheets"
-          ],
-          "summary": "Printable worksheets that go with the course and books.",
-          "description": [
-              "Replace with workbook details."
-          ],
-          "included": [
-              "60+ page printable PDF.",
-              "Fillable fields."
-          ],
-          "info": {
-              "Format": "PDF",
-              "Access": "Instant download",
-              "Pages": "64"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "planner",
-          "type": "book",
-          "title": "90-Day Action Planner",
-          "price": 15,
-          "color": [
-              "#c9a24a",
-              "#f2dc9b"
-          ],
-          "tags": [
-              "Worksheets"
-          ],
-          "summary": "A printable planner to turn goals into weekly actions.",
-          "description": [
-              "Replace with planner details."
-          ],
-          "included": [
-              "Quarterly, monthly and weekly pages.",
-              "Habit and revenue trackers."
-          ],
-          "info": {
-              "Format": "PDF",
-              "Access": "Instant download",
-              "Pages": "48"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      },
-      {
-          "id": "bundle",
-          "type": "bundle",
-          "title": "The Complete Bundle: Course + Books + Workbook",
-          "price": 229,
-          "compareAt": 334,
-          "badge": "Save 31%",
-          "color": [
-              "#1f1f1f",
-              "#e50069"
-          ],
-          "tags": [
-              "Marketing"
-          ],
-          "summary": "Everything in one package at the best price.",
-          "description": [
-              "Replace with bundle details."
-          ],
-          "included": [
-              "The Signature Course.",
-              "The First Book and The Second Book.",
-              "The Companion Workbook."
-          ],
-          "info": {
-              "Format": "Video + PDF + EPUB",
-              "Access": "Lifetime",
-              "Level": "All levels"
-          },
-          "image": "",
-          "checkoutUrl": ""
-      }
-  ],
 
   /* Optional: override the computed rating summary with your real totals
    * (e.g. imported from a review platform): { count, average, dist:{5:97,4:2,3:1,2:0,1:0} } */

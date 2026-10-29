@@ -137,9 +137,12 @@ legend { font-family: var(--serif); font-size: 1.5rem; padding: 0; margin-bottom
 .cover::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 85% 10%, rgba(255,255,255,.28), transparent 55%); pointer-events: none; }
 .cover-type { position: absolute; top: 1rem; left: 1.4rem; font-size: .7rem; letter-spacing: .16em; text-transform: uppercase; opacity: .85; }
 .cover-title { font-family: var(--serif); font-size: clamp(1.3rem, 2.2vw, 1.8rem); line-height: 1.1; font-weight: 600; position: relative; z-index: 1; }
-.thumb > .cover-book, .product-media > .cover-book { inset: 8% 28%; width: 44%; height: 84%; border-radius: 3px 8px 8px 3px; box-shadow: inset 6px 0 0 rgba(0,0,0,.22), 8px 10px 22px rgba(0,0,0,.28); padding-left: 1.5rem; }
-.thumb > .cover-book .cover-title { font-size: clamp(.85rem, 1.3vw, 1.1rem); overflow-wrap: anywhere; }
-.thumb > .cover-book .cover-type { left: 1.5rem; }
+/* Portrait "document" covers for books, guides and templates. */
+.thumb > :is(.cover-book, .cover-guide, .cover-template), .product-media > :is(.cover-book, .cover-guide, .cover-template) { inset: 8% 28%; width: 44%; height: 84%; border-radius: 3px 8px 8px 3px; box-shadow: inset 6px 0 0 rgba(0,0,0,.22), 8px 10px 22px rgba(0,0,0,.28); padding-left: 1.5rem; }
+.thumb > :is(.cover-book, .cover-guide, .cover-template) { container-type: inline-size; padding-right: .6rem; }
+/* Sized to the cover itself (container query units) so long words like "Companion" fit without mid-word breaks. */
+.thumb > :is(.cover-book, .cover-guide, .cover-template) .cover-title { font-size: clamp(.7rem, 14cqi, 1.15rem); hyphens: auto; overflow-wrap: break-word; }
+.thumb > :is(.cover-book, .cover-guide, .cover-template) .cover-type { left: 1.5rem; }
 
 /* Pagination */
 .pager { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: 2.5rem; }

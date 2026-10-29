@@ -4,7 +4,7 @@
   else root.SiteLib = factory();
 })(typeof self !== "undefined" ? self : this, function () {
   var ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  var TYPE_LABEL = { course: "Courses", book: "Books", bundle: "Bundles" };
+  var TYPE_LABEL = { course: "Courses", book: "Books", guide: "Guides", template: "Templates", bundle: "Bundles" };
   var MAX_QTY = 99;
 
   function esc(value) {
@@ -88,14 +88,21 @@
   }
 
   /* ---------- Cart (array of {id, qty}) ---------- */
+  /* ADR-0008: a digital licence is bought once unless the product allows quantity. */
+  function maxQtyFor(product) {
+    return product && product.allowQuantity ? MAX_QTY : 1;
+  }
+
   function parseCart(raw, products) {
     var data;
     try { data = JSON.parse(raw); } catch (e) { return []; }
     if (!Array.isArray(data)) return [];
     var seen = {};
     return data.reduce(function (acc, it) {
-      var qty = Math.min(MAX_QTY, parseInt(it && it.qty, 10) || 0);
-      if (it && typeof it.id === "string" && qty > 0 && !seen[it.id] && (!products || getProduct(products, it.id))) {
+      var product = products && it && typeof it.id === "string" ? getProduct(products, it.id) : null;
+      var limit = products ? maxQtyFor(product) : MAX_QTY;
+      var qty = Math.min(limit, parseInt(it && it.qty, 10) || 0);
+      if (it && typeof it.id === "string" && qty > 0 && !seen[it.id] && (!products || product)) {
         seen[it.id] = 1;
         acc.push({ id: it.id, qty: qty });
       }
@@ -103,20 +110,21 @@
     }, []);
   }
 
-  function cartAdd(cart, id, qty) {
+  function cartAdd(cart, id, qty, limit) {
+    limit = limit || MAX_QTY;
     qty = Math.max(1, parseInt(qty, 10) || 1);
     var found = false;
     var next = cart.map(function (it) {
       if (it.id !== id) return it;
       found = true;
-      return { id: id, qty: Math.min(MAX_QTY, it.qty + qty) };
+      return { id: id, qty: Math.min(limit, it.qty + qty) };
     });
-    if (!found) next.push({ id: id, qty: Math.min(MAX_QTY, qty) });
+    if (!found) next.push({ id: id, qty: Math.min(limit, qty) });
     return next;
   }
 
-  function cartSet(cart, id, qty) {
-    qty = Math.min(MAX_QTY, parseInt(qty, 10) || 0);
+  function cartSet(cart, id, qty, limit) {
+    qty = Math.min(limit || MAX_QTY, parseInt(qty, 10) || 0);
     return cart
       .map(function (it) { return it.id === id ? { id: id, qty: qty } : it; })
       .filter(function (it) { return it.qty > 0; });
@@ -200,7 +208,7 @@
     categoriesOf: categoriesOf, allCategories: allCategories,
     filterProducts: filterProducts, sortProducts: sortProducts, paginate: paginate,
     discountPercent: discountPercent,
-    parseCart: parseCart, cartAdd: cartAdd, cartSet: cartSet, cartCount: cartCount,
+    maxQtyFor: maxQtyFor, parseCart: parseCart, cartAdd: cartAdd, cartSet: cartSet, cartCount: cartCount,
     cartLines: cartLines, cartTotals: cartTotals,
     reviewSummary: reviewSummary, filterReviews: filterReviews, sortReviews: sortReviews,
     safeUrl: safeUrl, isEmail: isEmail, mailtoHref: mailtoHref,

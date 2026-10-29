@@ -47,7 +47,7 @@ test("CI workflow pins actions to commit SHAs and runs every gate", () => {
   const uses = [...ci.matchAll(/uses:\s*([^\s#]+)/g)].map((m) => m[1]);
   assert.ok(uses.length > 0);
   for (const u of uses) assert.match(u, /@[0-9a-f]{40}$/, `action not pinned to a SHA: ${u}`);
-  for (const step of ["npm run typecheck", "npm test", "npm run test:e2e", "npm audit", "gitleaks git", "npm run db:start", "npm run test:db", "git diff --exit-code -- types/database.ts"]) {
+  for (const step of ["npm run typecheck", "npm test", "npm run test:e2e", "npm audit", "gitleaks git", "npm run db:start", "npm run test:db", "git diff --exit-code -- types/database.ts", "npm run build", "npm run test:build"]) {
     assert.ok(ci.includes(step), `CI is missing: ${step}`);
   }
   assert.match(ci, /GITLEAKS_SHA256: [0-9a-f]{64}/, "gitleaks download must be checksum-verified");
@@ -72,4 +72,17 @@ test("ADR index lists every ADR", () => {
     assert.ok(index.includes(`(${f})`), `ADR index missing ${f}`);
     assert.match(fs.readFileSync(path.join(dir, f), "utf8"), /## Context[\s\S]+## Decision[\s\S]+## Consequences/, `${f} structure`);
   }
+});
+
+test("netlify.toml builds from the database and keeps old product URLs working", () => {
+  const toml = read("netlify.toml");
+  assert.match(toml, /command = "npm run build"/);
+  assert.match(toml, /publish = "dist"/);
+  const legacy = toml.indexOf('from = "/product.html"');
+  const catchAll = toml.indexOf('from = "/*"');
+  assert.ok(legacy > 0 && catchAll > legacy, "the legacy product redirect must precede the 404 catch-all");
+  assert.match(toml.slice(legacy, catchAll), /to = "\/product\/:id\/"[\s\S]*status = 301[\s\S]*query = \{ id = ":id" \}/);
+  assert.ok(!/included_files/.test(toml), "functions no longer bundle site-config.js (prices come from the database)");
+  const ignored = (f) => { try { git("check-ignore", "-q", f); return true; } catch { return false; } };
+  assert.ok(ignored("dist/index.html"), "build output is never committed");
 });

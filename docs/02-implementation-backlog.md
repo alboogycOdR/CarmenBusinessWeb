@@ -32,7 +32,7 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 | 0 | 1 | Repo foundation and CI | §6, §8 | D11 | 1 |
 | 1 | 1 | Database schema, RLS, seed, generated types | §4, §5, §6 | D9 (staging project) | 3 |
 | 2 | 1 | Catalogue from DB: build pipeline, SEO URLs, quantity = 1 | J1, J7 (read side) | PR 1 | 3 |
-| 3 | 2 | Payfast checkout: ZAR migration, signed form, pending orders | J2 | ~~D1, D2~~ ✓, D6, D8, D12, **D14**, D17 | 3.5 |
+| 3 | 2 | Payfast checkout: ZAR migration, signed form, pending orders | J2 | ~~D1, D2, D14~~ ✓, D6, D8, D12, D17 | 3.5 |
 | 4 | 2 | Payfast ITN (4 checks), idempotent confirmation, order status | J2, §4.2 | PR 3; **D16** for the sandbox run | 3 |
 | 5 | 3 | Private storage, delivery tokens, download endpoint | J3 | D4, D5 | 2.5 |
 | 6 | 3 | Email outbox, templates, external and mixed delivery | J3, J4, J5 | D3, D4, D7 | 3 |
@@ -92,6 +92,14 @@ The work runs as 14 small PRs grouped into the spec's five phases. Each PR is in
 - `site-config.js` keeps brand and content but loses `products`. `lib.js` and `main.js` read `window.CATALOG`.
 - Remove the per-product `checkoutUrl` buy links (G7). Hide the quantity control unless `allow_quantity` is set, and make `cartAdd` cap at 1 (G9, ADR-08).
 - Product `images` support with `srcset` and the generated-cover fallback kept.
+
+**As built (PR 2):**
+- The build is `scripts/build.mts`, run with Node's native type stripping (Node ≥ 22.18), so there is no bundler. It publishes `dist/`.
+- Templating is shared by the browser and the build (`assets/js/render.js`), so pre-rendered pages and the live view are the same markup.
+- All links are root-absolute. This also fixes the 404 page, which loaded no CSS or JS when served below the root.
+- **Removed the Stripe checkout prototype early.** It priced from `site-config.js` products, which no longer exist, and ADR-0009 supersedes it. The per-product `checkoutUrl` links went with it (G6, G7).
+- The **"Verified buyer" badge now shows only for reviews marked `verified: true`**, so placeholder reviews no longer claim it (G8, brought forward from PR 12).
+- The storefront now shows the `guide` and `template` types from the schema as their own categories, with portrait covers.
 
 **Tests:**
 - unit tests for the catalogue transform and cart quantity rules;

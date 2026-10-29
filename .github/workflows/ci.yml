@@ -38,7 +38,7 @@ jobs:
   e2e:
     name: End-to-end (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -50,6 +50,16 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - name: Install Chromium for the pinned Playwright version
         run: npx playwright install --with-deps chromium
+      - name: Start local Supabase (the site is built from the database)
+        run: npm run db:start
+      - name: Expose the local stack to the build, as Netlify env vars would
+        run: node scripts/supabase-env.mts >> "$GITHUB_ENV"
+      - name: Build the site from the database catalogue
+        run: npm run build
+        env:
+          SITE_URL: https://staging.example.com
+      - name: Build output contains no private data and matches the database
+        run: npm run test:build
       - run: npm run test:e2e
         env:
           SHOTS: e2e-screenshots
