@@ -1,0 +1,33 @@
+{
+    "source": "Payfast developer docs, Step 4.3 (pfValidSignature + stripslashes/urlencode loop), run on PHP 8.3.6",
+    "vectors": [
+        {
+            "name": "typical COMPLETE with empty optional fields",
+            "passphrase": "fake-passphrase-1",
+            "body": "m_payment_id=CBW-0A1B2C3D4E&pf_payment_id=1089250&payment_status=COMPLETE&item_name=Carmen+order+CBW-0A1B2C3D4E&item_description=The+First+Book%2C+The+Second+Book&amount_gross=448.00&amount_fee=-10.30&amount_net=437.70&custom_str1=&custom_str2=&custom_str3=&custom_str4=&custom_str5=&custom_int1=&custom_int2=&custom_int3=&custom_int4=&custom_int5=&name_first=Thandi&name_last=van+der+Merwe&email_address=buyer%2Btest%40example.com&merchant_id=10000001&signature=d7705edaa4f1e6e090e9f80ac9049413",
+            "paramString": "m_payment_id=CBW-0A1B2C3D4E&pf_payment_id=1089250&payment_status=COMPLETE&item_name=Carmen+order+CBW-0A1B2C3D4E&item_description=The+First+Book%2C+The+Second+Book&amount_gross=448.00&amount_fee=-10.30&amount_net=437.70&custom_str1=&custom_str2=&custom_str3=&custom_str4=&custom_str5=&custom_int1=&custom_int2=&custom_int3=&custom_int4=&custom_int5=&name_first=Thandi&name_last=van+der+Merwe&email_address=buyer%2Btest%40example.com&merchant_id=10000001",
+            "signature": "d7705edaa4f1e6e090e9f80ac9049413"
+        },
+        {
+            "name": "special characters, emoji, NBSP and apostrophes",
+            "passphrase": "fake pass & = phrase",
+            "body": "m_payment_id=CBW-ZZZZZZZZZZ&pf_payment_id=42&payment_status=COMPLETE&item_name=Carmen%27s+%22Best%22+Course+%26+Workbook+%3D+100%25+%F0%9F%98%80&item_description=Line+one%0ALine+two%C2%A0nbsp+%7E%2A%28%29%21&amount_gross=1997.00&name_first=Zo%C3%AB&name_last=O%27Brien-Ndlovu&email_address=a%40example.com&merchant_id=10000001&signature=abbe293d22418bfb2ab601f22ff8c630",
+            "paramString": "m_payment_id=CBW-ZZZZZZZZZZ&pf_payment_id=42&payment_status=COMPLETE&item_name=Carmen%27s+%22Best%22+Course+%26+Workbook+%3D+100%25+%F0%9F%98%80&item_description=Line+one%0ALine+two%C2%A0nbsp+%7E%2A%28%29%21&amount_gross=1997.00&name_first=Zo%C3%AB&name_last=O%27Brien-Ndlovu&email_address=a%40example.com&merchant_id=10000001",
+            "signature": "abbe293d22418bfb2ab601f22ff8c630"
+        },
+        {
+            "name": "backslashes are stripped as stripslashes() does",
+            "passphrase": "fake-passphrase-3",
+            "body": "m_payment_id=CBW-1111111111&pf_payment_id=7&payment_status=COMPLETE&item_name=C%3A%5Cpath%5Cto+%5C%5C+double&amount_gross=5.00&merchant_id=10000001&signature=29698b370cd1ac33a89ad794b79b00b9",
+            "paramString": "m_payment_id=CBW-1111111111&pf_payment_id=7&payment_status=COMPLETE&item_name=C%3Apathto+%5C+double&amount_gross=5.00&merchant_id=10000001",
+            "signature": "29698b370cd1ac33a89ad794b79b00b9"
+        },
+        {
+            "name": "fields after the signature are not signed",
+            "passphrase": "fake-passphrase-4",
+            "body": "m_payment_id=CBW-2222222222&pf_payment_id=8&payment_status=CANCELLED&amount_gross=5.00&merchant_id=10000001&signature=fcb7e3503706b501e55a75fec6cb8d57&extra_field=not+signed",
+            "paramString": "m_payment_id=CBW-2222222222&pf_payment_id=8&payment_status=CANCELLED&amount_gross=5.00&merchant_id=10000001",
+            "signature": "fcb7e3503706b501e55a75fec6cb8d57"
+        }
+    ]
+}

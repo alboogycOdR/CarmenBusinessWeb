@@ -53,6 +53,8 @@ const server = http.createServer((req, res) => {
 const CONFIG = fs.readFileSync(path.join(root, "assets/js/site-config.js"), "utf8");
 const errors = [];
 let base;
+let itnHandler;
+const pfIds = new Map(); // one Payfast transaction id per order, reused when an ITN is repeated
 
 async function newPage(browser, vp, patch) {
   const ctx = await browser.newContext({ viewport: vp });
@@ -200,11 +202,16 @@ async function cartFlow(browser) {
   await p2.goto(`${base}/success.html?ref=${paid.m_payment_id}`);
   await p2.waitForSelector('#order-status[data-state="pending"]');
   assert.strictEqual(await txt(p2, "[data-cart-count]"), "1", "cart kept while unconfirmed");
-  await admin(`orders?reference=eq.${paid.m_payment_id}`, { method: "PATCH", body: JSON.stringify({ status: "paid", paid_at: new Date().toISOString(), provider_txn_id: "e2e-" + paid.m_payment_id }) });
+  // Payfast's ITN arrives at the real /api/payfast/itn handler (Payfast's validate endpoint stubbed as VALID).
+  const itn = await deliverItn(paid);
+  assert.strictEqual(itn.status, 200, "ITN accepted");
+  assert.strictEqual(await itn.text(), "OK");
   await p2.waitForSelector('#order-status[data-state="paid"]', { timeout: 10000 });
   assert.match(await txt(p2, "h1"), /Payment received/);
+  assert.match(await txt(p2, ".delivery-list"), /Companion Workbook: a download link/, "the page says what is coming for each item");
   assert.strictEqual(await txt(p2, "[data-cart-count]"), "0", "cart cleared only after server confirmation");
-  step("success page: neutral until the server confirms, then paid");
+  assert.strictEqual((await deliverItn(paid)).status, 200, "a repeated ITN is acknowledged (duplicate)");
+  step("success page: neutral until the verified ITN pays the order, then lists the delivery");
 
   // A code only the server knows (FIXED20, R20 off) is applied at checkout.
   await p2.goto(base + "/"); await p2.locator('[data-add="workbook"]').click(); await p2.goto(base + "/cart.html");
@@ -360,6 +367,19 @@ async function mobile(browser) {
   await page.close();
 }
 
+/* Payfast's notification for a checkout: the fields Payfast sends, signed with the passphrase. */
+async function deliverItn(fields) {
+  const { itnParamString, phpUrlencode } = await import("../netlify/lib/payfast.mts");
+  const { createHash } = require("node:crypto");
+  const pairs = [["m_payment_id", fields.m_payment_id], ["pf_payment_id", pfIds.get(fields.m_payment_id) ?? pfIds.set(fields.m_payment_id, String(Date.now()) + String(pfIds.size)).get(fields.m_payment_id)],
+    ["payment_status", "COMPLETE"], ["item_name", fields.item_name], ["item_description", fields.item_description || ""],
+    ["amount_gross", fields.amount], ["amount_fee", "-2.97"], ["amount_net", "126.03"], ["custom_str1", ""], ["name_first", ""], ["name_last", ""],
+    ["email_address", fields.email_address], ["merchant_id", process.env.PAYFAST_MERCHANT_ID]];
+  const sig = createHash("md5").update(itnParamString(pairs, true) + "&passphrase=" + phpUrlencode(process.env.PAYFAST_PASSPHRASE)).digest("hex");
+  const body = new URLSearchParams([...pairs, ["signature", sig]]).toString();
+  return itnHandler(new Request(base + "/api/payfast/itn", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }), { ip: "197.97.145.150" });
+}
+
 async function admin(pathAndQuery, init = {}) {
   const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
     ...init,
@@ -381,6 +401,8 @@ async function admin(pathAndQuery, init = {}) {
   Object.assign(process.env, { SITE_URL: base, PAYFAST_MODE: "sandbox", PAYFAST_MERCHANT_ID: "10000001", PAYFAST_MERCHANT_KEY: "fakekey00000a", PAYFAST_PASSPHRASE: "e2e-passphrase-" + process.pid });
   api["/api/checkout"] = (await import("../netlify/functions/checkout.mts")).default;
   api["/api/order-status"] = (await import("../netlify/functions/order-status.mts")).default;
+  const { createItnHandler } = await import("../netlify/functions/payfast-itn.mts");
+  itnHandler = createItnHandler({ resolveHost: async () => [], validate: async () => "VALID" });
   const browser = await chromium.launch();
   const shots = process.env.SHOTS;
   try {

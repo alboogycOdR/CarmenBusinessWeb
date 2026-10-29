@@ -510,6 +510,22 @@
       <p class="muted">Need help accessing your courses? Please email us at <a href="mailto:${esc(S.brand.supportEmail)}">${esc(S.brand.supportEmail)}</a>.</p></div>`;
   }
 
+  /* What the buyer will receive per item (counts from the server; the links
+   * themselves only ever travel by email). */
+  function deliveryList(items) {
+    const n = (v) => (Number.isInteger(v) && v > 0 ? v : 0);
+    const plural = (k, one, many) => (k === 1 ? one : `${k} ${many}`);
+    const rows = items.map((it) => {
+      const parts = [];
+      if (n(it.downloads)) parts.push(plural(n(it.downloads), "a download link", "download links"));
+      if (n(it.links)) parts.push(plural(n(it.links), "your course access link", "access links"));
+      if (n(it.manual)) parts.push("access set up by our team (we'll email you when it's ready)");
+      const what = parts.length ? parts.join(", ") : "details from our team";
+      return `<li><strong>${esc(it.title)}</strong><span class="muted">: ${esc(what)}</span></li>`;
+    });
+    return rows.length ? `<ul class="delivery-list" aria-label="Your order">${rows.join("")}</ul>` : "";
+  }
+
   /* Payfast returns the buyer here. Spec §4.1: say "paid" only when the server
    * confirms it (the ITN, PR 4), never because of this redirect. */
   function renderSuccess() {
@@ -525,11 +541,11 @@
       pending: () => show({ state: "pending", text: "Confirming your payment…" },
         `<p>We're waiting for Payfast to confirm your payment. This usually takes a few seconds, so please keep this page open.</p>
          <p class="muted">If you completed payment, you'll also get an email from us. No email after 30 minutes? Contact ${support} with your order reference.</p>`),
-      paid: () => {
+      paid: (items) => {
         cart = []; saveCart(); setCode("");
         try { sessionStorage.removeItem("cw_order_" + ref); } catch (e) { /* ignore */ }
         show({ state: "paid", text: "Payment received. Thank you!" },
-          `<p>Your receipt and access details are on their way to your inbox.</p><p><a class="btn" href="/">Keep shopping</a></p>`);
+          `<p>Your receipt and access details are on their way to your inbox.</p>${deliveryList(items)}<p><a class="btn" href="/">Keep shopping</a></p>`);
       },
       unpaid: () => show({ state: "unpaid", text: "Payment not completed" },
         `<p>This payment wasn't completed, so you have not been charged. Your cart is still saved.</p><p><a class="btn" href="/cart.html">Return to cart</a></p>`),
@@ -543,7 +559,7 @@
       fetch(`/api/order-status?ref=${encodeURIComponent(ref)}&k=${encodeURIComponent(key)}`, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : r.status === 404 ? { status: "missing" } : Promise.reject(r.status)))
         .then((j) => {
-          if (j.status === "paid") return states.paid();
+          if (j.status === "paid") return states.paid(Array.isArray(j.items) ? j.items : []);
           if (j.status === "failed" || j.status === "expired") return states.unpaid();
           if (j.status === "missing") return states.unknown();
           if (++tries < 40) setTimeout(poll, 3000); // ~2 minutes, then stop with the support message

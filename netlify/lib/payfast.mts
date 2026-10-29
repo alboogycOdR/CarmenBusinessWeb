@@ -5,7 +5,7 @@
  *
  * Docs: https://developers.payfast.co.za/docs (custom integration, steps 1–3).
  */
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 export type PayfastMode = "sandbox" | "live";
 
@@ -95,4 +95,112 @@ export function buildCheckout(order: CheckoutOrder, creds: PayfastCredentials, s
   const fields = CHECKOUT_FIELD_ORDER.filter((k) => values[k] !== undefined && values[k] !== "").map((k) => [k, values[k] as string] as [string, string]);
   fields.push(["signature", signature(fields, creds.passphrase)]);
   return { action: processUrl(creds.mode), fields };
+}
+
+/* ---------------------------------------------------------------------------
+ * ITN (instant transaction notification), docs Step 4 (PR 4).
+ * ------------------------------------------------------------------------- */
+
+/* Payfast's server IPs, from the docs' "Ports and IP addresses" page (checked
+ * 2026-10-29). ITNs come from these; the public hostnames resolve to inbound
+ * load balancers, so a DNS-only check would reject genuine notifications. */
+export const PAYFAST_ITN_CIDRS = [
+  "197.97.145.144/28",
+  "41.74.179.192/27",
+  "102.216.36.0/28",
+  "102.216.36.128/28",
+  "144.126.193.139/32",
+] as const;
+
+/* The hosts Payfast's reference code resolves (pfValidIP); also trusted. */
+export const PAYFAST_ITN_HOSTS = ["www.payfast.co.za", "w1w.payfast.co.za", "w2w.payfast.co.za", "sandbox.payfast.co.za"] as const;
+
+export function validateUrl(mode: PayfastMode): string {
+  return mode === "live" ? "https://www.payfast.co.za/eng/query/validate" : "https://sandbox.payfast.co.za/eng/query/validate";
+}
+
+function ipv4ToInt(ip: string): number | null {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (!m) return null;
+  const parts = m.slice(1).map(Number);
+  if (parts.some((p) => p > 255)) return null;
+  return ((parts[0]! << 24) >>> 0) + (parts[1]! << 16) + (parts[2]! << 8) + parts[3]!;
+}
+
+/* "::ffff:1.2.3.4" (IPv4-mapped IPv6) → "1.2.3.4"; anything else unchanged. */
+export function normaliseIp(ip: string): string {
+  const v = ip.trim().toLowerCase();
+  return v.startsWith("::ffff:") && ipv4ToInt(v.slice(7)) !== null ? v.slice(7) : v;
+}
+
+export function ipInCidrs(ip: string, cidrs: readonly string[]): boolean {
+  const addr = ipv4ToInt(normaliseIp(ip));
+  if (addr === null) return false;
+  return cidrs.some((cidr) => {
+    const [base, bits] = cidr.split("/");
+    const b = ipv4ToInt(base ?? "");
+    const n = Number(bits);
+    if (b === null || !Number.isInteger(n) || n < 0 || n > 32) return false;
+    const mask = n === 0 ? 0 : (~0 << (32 - n)) >>> 0;
+    return ((addr & mask) >>> 0) === ((b & mask) >>> 0);
+  });
+}
+
+/* PHP stripslashes(): drops each backslash, keeps the escaped character, "\0" → NUL. */
+export function phpStripslashes(value: string): string {
+  return value.replace(/\\(.?)/gs, (_, c: string) => (c === "0" ? "\0" : c));
+}
+
+/* Ordered fields of a form body exactly as PHP's $_POST sees them. Duplicate or
+ * odd keys are refused: Payfast never sends them, and PHP would merge them. */
+export function parseItnBody(body: string): Array<[string, string]> | null {
+  const pairs: Array<[string, string]> = [];
+  const seen = new Set<string>();
+  for (const [k, v] of new URLSearchParams(body)) {
+    if (!/^[a-z0-9_]{1,40}$/.test(k) || seen.has(k)) return null;
+    seen.add(k);
+    pairs.push([k, v]);
+  }
+  return pairs;
+}
+
+/* The parameter string Payfast signs: every field before "signature", empty ones
+ * included, urlencoded but not trimmed (docs Step 4.3). */
+export function itnParamString(pairs: ReadonlyArray<readonly [string, string]>, strip: boolean): string {
+  const out: string[] = [];
+  for (const [k, v] of pairs) {
+    if (k === "signature") break;
+    out.push(`${k}=${phpUrlencode(strip ? phpStripslashes(v) : v)}`);
+  }
+  return out.join("&");
+}
+
+export interface ItnSignatureCheck {
+  ok: boolean;
+  /* The string to post back to /eng/query/validate (the variant that matched). */
+  paramString: string;
+}
+
+/* Constant-time check of the ITN signature. Payfast's reference strips slashes
+ * before hashing; the unstripped form is also accepted (both need the passphrase),
+ * so a value containing a backslash verifies whichever form Payfast signed. */
+export function verifyItnSignature(pairs: ReadonlyArray<readonly [string, string]>, passphrase: string): ItnSignatureCheck {
+  const given = pairs.find(([k]) => k === "signature")?.[1] ?? "";
+  const stripped = itnParamString(pairs, true);
+  if (!/^[0-9a-f]{32}$/.test(given)) return { ok: false, paramString: stripped };
+  const variants = [stripped];
+  const raw = itnParamString(pairs, false);
+  if (raw !== stripped) variants.push(raw);
+  for (const s of variants) {
+    const expected = createHash("md5").update(`${s}&passphrase=${phpUrlencode(passphrase)}`, "utf8").digest();
+    if (timingSafeEqual(expected, Buffer.from(given, "hex"))) return { ok: true, paramString: s };
+  }
+  return { ok: false, paramString: stripped };
+}
+
+/* "448.00" → 44800 cents, exactly; anything else → null. */
+export function parseAmountMinor(value: string | undefined): number | null {
+  const m = /^(\d{1,9})(?:\.(\d{1,2}))?$/.exec(value ?? "");
+  if (!m) return null;
+  return Number(m[1]) * 100 + Number((m[2] ?? "").padEnd(2, "0"));
 }

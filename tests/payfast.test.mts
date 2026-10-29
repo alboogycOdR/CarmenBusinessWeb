@@ -6,7 +6,10 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { amountString, buildCheckout, CHECKOUT_FIELD_ORDER, phpTrim, phpUrlencode, processUrl, signature } from "../netlify/lib/payfast.mts";
+import {
+  amountString, buildCheckout, CHECKOUT_FIELD_ORDER, ipInCidrs, itnParamString, normaliseIp, PAYFAST_ITN_CIDRS, parseAmountMinor, parseItnBody,
+  phpStripslashes, phpTrim, phpUrlencode, processUrl, signature, validateUrl, verifyItnSignature,
+} from "../netlify/lib/payfast.mts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VECTORS = JSON.parse(fs.readFileSync(path.join(here, "fixtures/payfast_signature_vectors.json"), "utf8")) as {
@@ -81,4 +84,75 @@ test("live mode posts to the live host; long text is clipped by code point", () 
   const form = buildCheckout({ reference: "CBW-1111111111", totalMinor: 500, email: "b@example.com", titles }, { ...CREDS, mode: "live" }, "https://s.example", "Carmen");
   const desc = Object.fromEntries(form.fields).item_description!;
   assert.ok(Array.from(desc).length <= 255 && desc.endsWith("…"));
+});
+
+/* ---------- ITN (PR 4) ---------- */
+
+const ITN = JSON.parse(fs.readFileSync(path.join(here, "fixtures/payfast_itn_vectors.json"), "utf8")) as {
+  vectors: Array<{ name: string; passphrase: string; body: string; paramString: string; signature: string }>;
+};
+
+test("ITN signatures match Payfast's PHP reference code exactly", () => {
+  assert.ok(ITN.vectors.length >= 4);
+  for (const v of ITN.vectors) {
+    const pairs = parseItnBody(v.body);
+    assert.ok(pairs, v.name);
+    assert.strictEqual(itnParamString(pairs!, true), v.paramString, `${v.name}: parameter string`);
+    const check = verifyItnSignature(pairs!, v.passphrase);
+    assert.strictEqual(check.ok, true, `${v.name}: verifies`);
+    assert.strictEqual(check.paramString, v.paramString, `${v.name}: validate is posted the signed string`);
+    assert.strictEqual(verifyItnSignature(pairs!, v.passphrase + "x").ok, false, `${v.name}: wrong passphrase fails`);
+  }
+});
+
+test("ITN signature: any change to a signed field, or a missing/odd signature, fails", () => {
+  const v = ITN.vectors[0]!;
+  const pairs = parseItnBody(v.body)!;
+  for (let i = 0; i < pairs.length; i++) {
+    if (pairs[i]![0] === "signature") continue;
+    const tampered = pairs.map((p, j) => (j === i ? [p[0], p[1] + "1"] as [string, string] : p));
+    assert.strictEqual(verifyItnSignature(tampered, v.passphrase).ok, false, `tampered ${pairs[i]![0]}`);
+  }
+  const reordered = [pairs[1]!, pairs[0]!, ...pairs.slice(2)];
+  assert.strictEqual(verifyItnSignature(reordered, v.passphrase).ok, false, "field order is signed");
+  assert.strictEqual(verifyItnSignature(pairs.filter(([k]) => k !== "signature"), v.passphrase).ok, false, "no signature");
+  assert.strictEqual(verifyItnSignature(pairs.map(([k, x]) => [k, k === "signature" ? x.toUpperCase() : x] as [string, string]), v.passphrase).ok, false, "upper-case hex is not Payfast's format");
+  const extra = ITN.vectors.find((x) => x.name.includes("after the signature"))!;
+  assert.ok(extra.body.includes("extra_field="), "vector carries an unsigned trailing field");
+});
+
+test("ITN body parsing refuses what PHP would merge or rename", () => {
+  assert.deepStrictEqual(parseItnBody("a=1&b=&c=x+y"), [["a", "1"], ["b", ""], ["c", "x y"]]);
+  assert.strictEqual(parseItnBody("a=1&a=2"), null, "duplicate key");
+  assert.strictEqual(parseItnBody("a.b=1"), null, "PHP turns dots into underscores");
+  assert.strictEqual(parseItnBody("a[]=1"), null, "PHP arrays");
+});
+
+test("stripslashes behaves like PHP's", () => {
+  assert.strictEqual(phpStripslashes("C:\\\\dir\\\\file"), "C:\\dir\\file");
+  assert.strictEqual(phpStripslashes("O\\'Brien \\\"x\\\""), "O'Brien \"x\"");
+  assert.strictEqual(phpStripslashes("a\\0b"), "a\0b");
+  assert.strictEqual(phpStripslashes("trailing\\"), "trailing");
+});
+
+test("source IP: Payfast's published ranges only", () => {
+  const inside = ["197.97.145.144", "197.97.145.159", "41.74.179.192", "41.74.179.223", "102.216.36.0", "102.216.36.15", "102.216.36.128", "102.216.36.143", "144.126.193.139", "::ffff:197.97.145.150"];
+  const outside = ["197.97.145.143", "197.97.145.160", "41.74.179.224", "102.216.36.16", "102.216.36.127", "144.126.193.138", "10.0.0.1", "127.0.0.1", "", "not-an-ip", "2001:db8::1", "256.1.1.1"];
+  for (const ip of inside) assert.strictEqual(ipInCidrs(ip, PAYFAST_ITN_CIDRS), true, ip);
+  for (const ip of outside) assert.strictEqual(ipInCidrs(ip, PAYFAST_ITN_CIDRS), false, ip);
+  assert.strictEqual(normaliseIp(" ::FFFF:41.74.179.200 "), "41.74.179.200");
+  assert.strictEqual(ipInCidrs("1.2.3.4", ["0.0.0.0/0"]), true, "a /0 matches everything (mask edge case)");
+});
+
+test("amount_gross is parsed to exact cents", () => {
+  assert.strictEqual(parseAmountMinor("448.00"), 44800);
+  assert.strictEqual(parseAmountMinor("5.5"), 550);
+  assert.strictEqual(parseAmountMinor("1997"), 199700);
+  assert.strictEqual(parseAmountMinor("0.07"), 7);
+  for (const bad of [undefined, "", "-5.00", "5.001", "1e3", " 5.00", "5,00", "R5.00", "0x10"]) assert.strictEqual(parseAmountMinor(bad), null, String(bad));
+});
+
+test("validate endpoint per mode", () => {
+  assert.strictEqual(validateUrl("sandbox"), "https://sandbox.payfast.co.za/eng/query/validate");
+  assert.strictEqual(validateUrl("live"), "https://www.payfast.co.za/eng/query/validate");
 });
