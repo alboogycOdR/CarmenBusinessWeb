@@ -52,6 +52,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Start local Supabase (the site is built from the database)
         run: npm run db:start
+      - name: Expose the local stack to the build, as Netlify env vars would
+        run: node scripts/supabase-env.mts >> "$GITHUB_ENV"
       - name: Build the site from the database catalogue
         run: npm run build
         env:
