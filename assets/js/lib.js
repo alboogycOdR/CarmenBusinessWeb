@@ -13,9 +13,18 @@
     });
   }
 
+  /* D17: rands as "R1 997.00": no-break space between thousands (so a price
+   * never wraps), point for decimals. Other currencies use Intl. */
+  function formatZar(n) {
+    var cents = Math.round(Math.abs(n) * 100);
+    var whole = String(Math.floor(cents / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+    return (n < 0 ? "-" : "") + "R" + whole + "." + String(cents % 100).padStart(2, "0");
+  }
+
   function formatPrice(amount, currency) {
     var n = Number(amount);
     if (!isFinite(n)) return "";
+    if (currency === "ZAR") return formatZar(n);
     try {
       return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(n);
     } catch (e) {

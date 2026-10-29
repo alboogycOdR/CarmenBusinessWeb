@@ -249,3 +249,12 @@ table.info { border-collapse: collapse; width: 100%; max-width: 640px; }
 
 /* Secondary page titles are sentence case; only the big page-head titles are all caps. */
 .narrow-lg h1, .cart-page h1, .narrow h1 { text-transform: none; font-size: clamp(2rem, 5vw, 3rem); }
+
+/* Checkout form (cart page) */
+.checkout-form { margin-top: 1.2rem; display: grid; gap: .5rem; }
+.checkout-form > label:not(.check) { font-size: .9rem; font-weight: 500; }
+.checkout-form .check { align-items: flex-start; font-size: .9rem !important; line-height: 1.4; }
+.checkout-form .check input { margin-top: .15rem; flex: none; }
+.checkout-form b { color: var(--brand); }
+.checkout-form .btn-block { margin-top: .4rem; }
+.cart-page > .notice { margin-bottom: 1.5rem; }
