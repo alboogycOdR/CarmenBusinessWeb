@@ -80,7 +80,8 @@ select is(tests.count_rows('admin_profiles'), 1::bigint, 'admin: sees only own s
 
 -- ========================== owner =========================================
 select tests.act_as('authenticated', '00000000-0000-4000-8000-0000000000a4', 'aal2');
-select is(tests.count_rows('admin_profiles'), 3::bigint, 'owner aal2: sees all staff');
+select is(tests.count_rows('admin_profiles'), tests.total_rows('admin_profiles'), 'owner aal2: sees all staff');
+select ok(tests.total_rows('admin_profiles') >= 3, 'non-vacuous: the three test staff exist');
 select throws_ok($$ insert into public.admin_profiles (user_id, role) values ('00000000-0000-4000-8000-0000000000a1', 'admin') $$, '42501', null, 'owner: staff are granted by script, not via the API');
 select tests.act_as('authenticated', '00000000-0000-4000-8000-0000000000a4', 'aal1');
 select is(tests.count_rows('admin_profiles'), 1::bigint, 'owner aal1: only own profile before MFA');

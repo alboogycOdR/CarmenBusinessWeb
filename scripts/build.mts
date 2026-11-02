@@ -269,8 +269,10 @@ export function buildSite(rows: CatalogRow[], opts: { outDir: string; siteUrl: s
   const root = opts.root ?? ROOT;
   const outDir = path.resolve(opts.outDir);
   // fs.rmSync below deletes outDir: only ever inside the project or the OS temp dir.
-  const tmp = fs.realpathSync(os.tmpdir());
-  if (!outDir.startsWith(root + path.sep) && !outDir.startsWith(tmp + path.sep)) {
+  // The temp dir is accepted under both spellings: on macOS os.tmpdir() is
+  // /var/folders/... while its real path is /private/var/folders/... (symlink).
+  const tmps = [...new Set([os.tmpdir(), fs.realpathSync(os.tmpdir())])];
+  if (!outDir.startsWith(root + path.sep) && !tmps.some((t) => outDir.startsWith(t + path.sep))) {
     throw new BuildError(`refusing to write outside the project: ${outDir}`);
   }
   if (outDir === root || outDir === path.join(root, "assets") || outDir === path.join(root, "supabase")) {
