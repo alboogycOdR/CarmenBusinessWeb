@@ -116,14 +116,16 @@ test("owner: password alone (aal1) is refused everywhere; after MFA (aal2) the a
 test("sign-ins are audited and readable by the owner (through RLS with the owner's own token)", async () => {
   const post = await call(session, "/api/admin/session", owner.aal2, { method: "POST", headers: { Origin: SITE } });
   assert.strictEqual(post.status, 200);
-  const r = await call(auditLog, "/api/admin/audit?limit=20", owner.aal2);
+  // The API's maximum page: other test files write audit rows concurrently,
+  // so this owner's setup rows may no longer be among the newest 20.
+  const r = await call(auditLog, "/api/admin/audit?limit=200", owner.aal2);
   assert.strictEqual(r.status, 200);
   const { entries } = await body(r);
   const signIn = entries.find((e: any) => e.what === "sign_in" && e.entityId === claims(owner.aal2).session_id);
   assert.ok(signIn, "the sign-in is in the log");
   assert.strictEqual(signIn.who, "Carmen");
   assert.strictEqual(signIn.label, "Signed in to the admin");
-  assert.ok(entries.some((e: any) => e.label === "Staff profile added"), "row changes get plain-English labels");
+  assert.ok(entries.some((e: any) => e.label === "Staff profile added" && e.entityId === owner.id), "row changes get plain-English labels");
   assert.ok(entries.some((e: any) => e.what === "grant_admin"), "the owner-run grant is in the log too");
   assert.strictEqual((await call(session, "/api/admin/session", owner.aal2, { method: "POST", headers: { Origin: "https://evil.example" } })).status, 403, "cross-site POST refused");
 });

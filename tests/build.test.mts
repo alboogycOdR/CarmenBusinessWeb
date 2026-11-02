@@ -178,6 +178,25 @@ test("buildSite refuses to delete anything outside the project or temp dir", () 
   assert.throws(() => buildSite(ROWS, { outDir: path.join(here, "../assets"), siteUrl: SITE }), /source directory/);
 });
 
+test("buildSite accepts a temp dir reached through a symlink (macOS: /var -> /private/var)", () => {
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), "cbw-tmp-"));
+  const link = `${real}-link`;
+  fs.symlinkSync(real, link);
+  const saved = process.env.TMPDIR;
+  process.env.TMPDIR = link;
+  try {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "cbw-build-"));
+    assert.ok(out.startsWith(link + path.sep), "the output path uses the symlinked spelling");
+    buildSite(ROWS, { outDir: out, siteUrl: SITE });
+    assert.ok(fs.existsSync(path.join(out, "index.html")));
+  } finally {
+    if (saved === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = saved;
+    fs.rmSync(link, { force: true });
+    fs.rmSync(real, { recursive: true, force: true });
+  }
+});
+
 test("admin (PR 8): public config only, and a strict CSP naming this environment's Supabase", () => {
   const sb = { url: "https://abcd.supabase.co/", anonKey: "public-anon-key" };
   const ctx = { window: {} as { ADMIN_CONFIG?: Record<string, string> } };
